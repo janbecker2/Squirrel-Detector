@@ -93,7 +93,7 @@ ApplicationWindow {
                 }
 
                 Text {
-                    text: "Analyzing Squirrel..."
+                    text: "Processing Video..."
                     anchors.top: loadingCanvas.bottom
                     anchors.topMargin: 20
                     anchors.horizontalCenter: parent.horizontalCenter
