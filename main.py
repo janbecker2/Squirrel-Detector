@@ -1,94 +1,144 @@
 import sys
 import os
+import threading
 from pathlib import Path
 from PySide6.QtCore import QObject, Slot, Signal, QTimer, QMetaObject, Qt
 from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
-from sam3_segmenter import Sam3VideoSegmenter
+from PySide6.QtQuick import QQuickImageProvider
 import cv2 as cv
-import threading
+from sam3_segmenter import Sam3VideoSegmenter
 
+class FrameProvider(QQuickImageProvider):
+    def __init__(self):
+        super().__init__(QQuickImageProvider.Image)
+        self.current_frame = QImage()
+
+    def requestImage(self, id, size, requestedSize):
+        # QML calls this whenever the source "image://frames/..." changes
+        if self.current_frame.isNull():
+            # Return an empty transparent image if nothing is loaded
+            return QImage(1, 1, QImage.Format_ARGB32)
+        return self.current_frame
+
+    def update_frame(self, cv_img):
+        # Convert OpenCV (BGR) to RGB QImage
+        height, width, channel = cv_img.shape
+        bytes_per_line = channel * width
+        
+        # We create the QImage and use .copy() to ensure the memory is 
+        # owned by the QImage, preventing crashes when OpenCV releases the buffer
+        self.current_frame = QImage(
+            cv_img.data, width, height, bytes_per_line, QImage.Format_RGB888
+        ).rgbSwapped().copy()
 
 class Bridge(QObject):
+    maxFrameChanged = Signal(int)
+    frameUpdated = Signal() # Signal QML to refresh the image provider
+    propagationFinished = Signal()
 
-    maxFrameChanged = Signal(int)  
-    frameReady = Signal(str) 
-
-    def __init__(self):
+    def __init__(self, provider):
         super().__init__()
-        self.segmenter = Sam3VideoSegmenter(target_size=512)
-
-        # debounce timer
+        self.provider = provider
+        self.segmenter = Sam3VideoSegmenter(target_size=1024)
+        
         self.frame_timer = QTimer()
         self.frame_timer.setSingleShot(True)
         self.frame_timer.timeout.connect(self._process_frame)
         self.pending_frame_idx = None
+        
+        self.propagationFinished.connect(self.generate_graph)
+        
+        chartDataUpdated = Signal(list, int, float)
+
 
     @Slot(str)
     def load_video(self, video_url):
-        # 1. Sanitize the path
         path = video_url.replace("file:///", "")
         if sys.platform == "win32":
             path = path.replace("/", "\\")
+            if path.startswith("\\") and ":" in path:
+                path = path[1:]
         
-        # 2. Kick off the heavy processing in a BACKGROUND thread
-        # This allows the main thread to return to QML immediately and draw the spinner
         worker = threading.Thread(target=self._run_segmentation, args=(path,))
-        worker.daemon = True # Ensures thread closes if app is closed
+        worker.daemon = True
         worker.start()
 
     def _run_segmentation(self, path):
-        # The moment this starts, the UI thread is freed
         self.segmenter.load_video(path)
         self.segmenter.add_text_prompt("Squirrel")
-
-        # Give the OS a tiny slice of time to process the UI animations
-        total_frames = len(self.segmenter.video_frames)
         
-        # Use the thread-safe emit
+        total_frames = len(self.segmenter.video_frames)
         self.maxFrameChanged.emit(total_frames - 1)
 
         if total_frames > 0:
             self.pending_frame_idx = 0
-            # This MUST be a QueuedConnection to fire on the Main Thread
             QMetaObject.invokeMethod(self, "_process_frame", Qt.QueuedConnection)
-
 
     @Slot(int)
     def request_frame(self, frame_idx):
-        """Called from QML on slider change."""
         self.pending_frame_idx = frame_idx
-        # restart timer each move; process only after 200ms of inactivity
-        self.frame_timer.start(200)
+        self.frame_timer.start(50) 
 
+    @Slot()
     def _process_frame(self):
         if self.pending_frame_idx is None or not self.segmenter:
             return
+        
         frame_idx = self.pending_frame_idx
         self.pending_frame_idx = None
 
-        # Get frame from segmenter
-        frame = self.segmenter.video_frames[frame_idx].copy()
-
-        # Apply mask if available
         frame_output = self.segmenter.showSingleFrame(frame_idx, return_frame_only=True)
 
-        # Save temporarily as PNG
-        tmp_path = os.path.join(os.getcwd(), f"tmp_frame_{frame_idx}.png")
-        cv.imwrite(tmp_path, frame_output)
+        self.provider.update_frame(frame_output)
+        
+        # Notify QML
+        self.frameUpdated.emit()
+    
+    @Slot()
+    def propagate_video(self):
+        def worker():
+            try:
+                self.segmenter.propagate_video()
+            except Exception as e:
+                print(f"Propagation error: {e}")
+            finally:
+                # 🔹 Emit signal to trigger graph generation
+                self.propagationFinished.emit()
 
-        # Emit to QML
-        self.frameReady.emit(tmp_path)
+        threading.Thread(target=worker, daemon=True).start()
+
+        
+    @Slot()
+    def generate_graph(self):
+        if not hasattr(self.segmenter, "mask_areas") or not self.segmenter.mask_areas:
+            print("No mask data available. Run propagate_video() first.")
+            return
+
+        chart_data, current_max = self.segmenter.generate_graph()
+        max_frames = len(chart_data)
+        
+        # Emit to QML Canvas
+        self.chartDataUpdated.emit(chart_data, max_frames, current_max)
+        print("Chart data sent to QML Canvas")
+
+
 
 
 if __name__ == "__main__":
     app = QGuiApplication(sys.argv)
     engine = QQmlApplicationEngine()
 
-    bridge = Bridge()
+    # 1. Initialize the Provider
+    image_provider = FrameProvider()
+    
+    # 2. Initialize the Bridge with access to the provider
+    bridge = Bridge(image_provider)
+
+    # 3. Register the provider with the engine
+    engine.addImageProvider("frames", image_provider)
 
     qml_path = Path(__file__).parent / "UI" / "main.qml"
-
     engine.rootContext().setContextProperty("python_bridge", bridge)
     engine.load(str(qml_path))
 

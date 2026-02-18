@@ -4,9 +4,10 @@ from transformers import Sam3VideoModel, Sam3VideoProcessor
 from accelerate import Accelerator
 import cv2 as cv
 import time
-from PySide6.QtGui import QImage
 from transformers.video_utils import load_video
-
+import matplotlib
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt
 
 class Sam3VideoSegmenter:
     def __init__(self, model_id="facebook/sam3", target_size=512):
@@ -23,12 +24,17 @@ class Sam3VideoSegmenter:
             self.DEVICE, dtype=self.DTYPE
         ).eval()
         self.processor = Sam3VideoProcessor.from_pretrained(self.MODEL_ID)
-
         print("Successfully loaded models.")
         
+        self.video_frames = None
+        self.video_frames_original_size = None
+        self.inference_session = None
+        self.mask_areas = []
+    
+    video_frames_original_size = None
     def load_video(self, video_path):
         # Load video
-        video_frames_original_size, _ = load_video(video_path)
+        self.video_frames_original_size, _ = load_video(video_path)
         video_frames, _ = load_video(video_path)
 
         resized_frames = []
@@ -71,28 +77,30 @@ class Sam3VideoSegmenter:
             model_outputs
         )
 
-        output = {frame_idx: processed_outputs}
-        frame_output = output[frame_idx]
+        frame_output = processed_outputs
+        
+        frame = self.video_frames_original_size[frame_idx].copy()
+        h, w = frame.shape[:2]
 
-        frame = self.video_frames[frame_idx].copy()  # start with original frame
-
-        # check if any masks exist
         if len(frame_output["masks"]) > 0:
-            # apply the first mask
-            mask = frame_output["masks"][0].detach().cpu().numpy().astype("uint8") * 255
-            frame[mask == 255] = [0, 255, 0]  # overlay mask in green
+            raw_mask = frame_output["masks"][0].detach().cpu().numpy().astype("uint8") * 255
+            
+            mask_resized = cv.resize(raw_mask, (w, h), interpolation=cv.INTER_NEAREST)
+            
+            frame[mask_resized == 255] = [0, 255, 0]  # Green overlay
         else:
             print(f"No masks detected for frame {frame_idx}")
             
         if return_frame_only:
-            return frame
+            frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+            return frame_rgb
 
-        # display the frame (with or without mask)
-        cv.imshow("Mask", frame)
+        cv.imshow("High Res Mask", frame)
         cv.waitKey(0)
         cv.destroyAllWindows()
 
-    def showWholeVideo(self, output_path=None):
+        
+    def propagate_video1(self, output_path=None):
         writer = None
         if output_path is not None:
             h, w = self.video_frames[0].shape[:2]
@@ -126,7 +134,6 @@ class Sam3VideoSegmenter:
                 alpha = 0.5
                 frame = cv.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
-            cv.imshow("Segmented Video", frame)
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
 
@@ -148,42 +155,73 @@ class Sam3VideoSegmenter:
             writer.release()
 
         print("\nFinished processing all frames")
+    
+    def propagate_video(self, show_live=False):
+        if self.video_frames is None:
+            raise ValueError("Load a video first.")
 
-    def get_frame_with_mask(self, frame_idx):
-        model_outputs = self.model(
-            inference_session=self.inference_session,
-            frame_idx=frame_idx,
+        self.mask_areas = []
+        processed_frames = []
+        total_frames = len(self.video_frames)
+        start_time = time.time()
+
+        for i, model_outputs in enumerate(self.model.propagate_in_video_iterator(self.inference_session), 1):
+            frame_idx = model_outputs.frame_idx
+            processed_outputs = self.processor.postprocess_outputs(self.inference_session, model_outputs)
+            frame = self.video_frames[frame_idx].copy()
+
+            mask_area = 0
+            if processed_outputs["masks"].numel() > 0:
+                mask = processed_outputs["masks"][0].detach().cpu().numpy().astype("uint8") * 255
+                mask_area = np.sum(mask > 0)
+
+                overlay = frame.copy()
+                overlay[mask == 255] = [0, 255, 0]
+                alpha = 0.5
+                frame = cv.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+            self.mask_areas.append(mask_area)
+            processed_frames.append(frame)
+
+            if show_live:
+                cv.imshow("Segmented Video", frame)
+                if cv.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+            elapsed = time.time() - start_time
+            avg_per_frame = elapsed / i
+            remaining_time = avg_per_frame * (total_frames - i)
+            print(
+                f"Frame {i}/{total_frames} processed. "
+                f"Elapsed: {elapsed:.1f}s, "
+                f"Remaining: {remaining_time:.1f}s",
+                end="\r"
+            )
+
+        cv.destroyAllWindows()
+        print("\nFinished processing all frames")
+        return processed_frames
+
+    def export_video(self, frames, output_path, fps=30):
+        if not frames:
+            raise ValueError("No frames to export")
+        h, w = frames[0].shape[:2]
+        writer = cv.VideoWriter(
+            output_path,
+            cv.VideoWriter_fourcc(*"mp4v"),
+            fps,
+            (w, h)
         )
+        for frame in frames:
+            writer.write(frame)
+        writer.release()
+        print(f"Video exported to {output_path}")
 
-        processed_outputs = self.processor.postprocess_outputs(
-            self.inference_session,
-            model_outputs
-        )
+    def generate_graph(self):
+        if not hasattr(self, "mask_areas") or not self.mask_areas:
+            return [], 0.0
 
-        frame = self.video_frames[frame_idx].copy()
-
-        if processed_outputs["masks"].numel() > 0:
-            mask = processed_outputs["masks"][0].detach().cpu().numpy().astype("uint8")
-
-            overlay = frame.copy()
-            overlay[mask == 1] = [0, 255, 0]
-            alpha = 0.5
-            frame = cv.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
-
-        # BGR → RGB
-        frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-
-        h, w, ch = frame.shape
-        bytes_per_line = ch * w
-
-        q_image = QImage(
-            frame.data,
-            w,
-            h,
-            bytes_per_line,
-            QImage.Format_RGB888
-        )
-
-        return q_image.copy()  # VERY IMPORTANT (memory safety)
-
+        data = self.mask_areas
+        max_val = max(data) if data else 1.0
+        return data, max_val
 
