@@ -36,6 +36,11 @@ class Bridge(QObject):
         total_frames = len(self.segmenter.video_frames)
         self.maxFrameChanged.emit(total_frames - 1)
 
+        if total_frames > 0:
+            self.pending_frame_idx = 0
+            self._process_frame()
+
+
     @Slot(int)
     def request_frame(self, frame_idx):
         """Called from QML on slider change."""
@@ -53,11 +58,11 @@ class Bridge(QObject):
         frame = self.segmenter.video_frames[frame_idx].copy()
 
         # Apply mask if available
-        frame_output = self.segmenter.showSingleFrame(frame_idx, return_frame_only=False)
+        frame_output = self.segmenter.showSingleFrame(frame_idx, return_frame_only=True)
 
         # Save temporarily as PNG
-        tmp_path = os.path.join(os.getcwd(), "tmp_frame.png")
-        cv.imwrite(tmp_path, frame)
+        tmp_path = os.path.join(os.getcwd(), f"tmp_frame_{frame_idx}.png")
+        cv.imwrite(tmp_path, frame_output)
 
         # Emit to QML
         self.frameReady.emit(tmp_path)
