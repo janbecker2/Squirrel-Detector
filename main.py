@@ -1,11 +1,12 @@
 import sys
 import os
 from pathlib import Path
-from PySide6.QtCore import QObject, Slot, Signal, QTimer
+from PySide6.QtCore import QObject, Slot, Signal, QTimer, QMetaObject, Qt
 from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
 from sam3_segmenter import Sam3VideoSegmenter
 import cv2 as cv
+import threading
 
 
 class Bridge(QObject):
@@ -15,7 +16,7 @@ class Bridge(QObject):
 
     def __init__(self):
         super().__init__()
-        self.segmenter = Sam3VideoSegmenter()
+        self.segmenter = Sam3VideoSegmenter(target_size=512)
 
         # debounce timer
         self.frame_timer = QTimer()
@@ -25,20 +26,32 @@ class Bridge(QObject):
 
     @Slot(str)
     def load_video(self, video_url):
+        # 1. Sanitize the path
         path = video_url.replace("file:///", "")
         if sys.platform == "win32":
             path = path.replace("/", "\\")
-        print(f"Loading video: {path}")
+        
+        # 2. Kick off the heavy processing in a BACKGROUND thread
+        # This allows the main thread to return to QML immediately and draw the spinner
+        worker = threading.Thread(target=self._run_segmentation, args=(path,))
+        worker.daemon = True # Ensures thread closes if app is closed
+        worker.start()
 
+    def _run_segmentation(self, path):
+        # The moment this starts, the UI thread is freed
         self.segmenter.load_video(path)
         self.segmenter.add_text_prompt("Squirrel")
 
+        # Give the OS a tiny slice of time to process the UI animations
         total_frames = len(self.segmenter.video_frames)
+        
+        # Use the thread-safe emit
         self.maxFrameChanged.emit(total_frames - 1)
 
         if total_frames > 0:
             self.pending_frame_idx = 0
-            self._process_frame()
+            # This MUST be a QueuedConnection to fire on the Main Thread
+            QMetaObject.invokeMethod(self, "_process_frame", Qt.QueuedConnection)
 
 
     @Slot(int)
