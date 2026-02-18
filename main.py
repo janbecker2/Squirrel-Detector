@@ -1,35 +1,67 @@
 import sys
+import os
 from pathlib import Path
-# Added Signal to the import line below
-from PySide6.QtCore import QObject, Slot, Signal 
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QObject, Slot, Signal, QTimer
+from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
-from videoAnalyzer import VideoAnalyzer
+from sam3_segmenter import Sam3VideoSegmenter
+import cv2 as cv
+
 
 class Bridge(QObject):
-    dataReady = Signal(list)       # Keep this for the final full dataset
-    frameData = Signal(int, int)   # New: emits (frame_number, pixel_count) live
+
+    maxFrameChanged = Signal(int)  
+    frameReady = Signal(str) 
 
     def __init__(self):
         super().__init__()
-        self.analyzer = VideoAnalyzer(scale=0.5)
+        self.segmenter = Sam3VideoSegmenter()
+
+        # debounce timer
+        self.frame_timer = QTimer()
+        self.frame_timer.setSingleShot(True)
+        self.frame_timer.timeout.connect(self._process_frame)
+        self.pending_frame_idx = None
 
     @Slot(str)
-    def handle_video(self, video_url):
+    def load_video(self, video_url):
         path = video_url.replace("file:///", "")
         if sys.platform == "win32":
             path = path.replace("/", "\\")
+        print(f"Loading video: {path}")
 
-        print(f"Analyzing video at: {path}")
-        data = self.analyzer.process_video(path, self.on_frame_processed)
+        self.segmenter.load_video(path)
+        self.segmenter.add_text_prompt("Squirrel")
 
-        if data:
-            self.dataReady.emit(data)
-        else:
-            print("No data was generated from the video.")
+        total_frames = len(self.segmenter.video_frames)
+        self.maxFrameChanged.emit(total_frames - 1)
 
-    def on_frame_processed(self, frame_number, pixel_count):
-        self.frameData.emit(frame_number, pixel_count)
+    @Slot(int)
+    def request_frame(self, frame_idx):
+        """Called from QML on slider change."""
+        self.pending_frame_idx = frame_idx
+        # restart timer each move; process only after 200ms of inactivity
+        self.frame_timer.start(200)
+
+    def _process_frame(self):
+        if self.pending_frame_idx is None or not self.segmenter:
+            return
+        frame_idx = self.pending_frame_idx
+        self.pending_frame_idx = None
+
+        # Get frame from segmenter
+        frame = self.segmenter.video_frames[frame_idx].copy()
+
+        # Apply mask if available
+        frame_output = self.segmenter.showSingleFrame(frame_idx, return_frame_only=False)
+
+        # Save temporarily as PNG
+        tmp_path = os.path.join(os.getcwd(), "tmp_frame.png")
+        cv.imwrite(tmp_path, frame)
+
+        # Emit to QML
+        self.frameReady.emit(tmp_path)
+
 
 if __name__ == "__main__":
     app = QGuiApplication(sys.argv)
@@ -37,13 +69,12 @@ if __name__ == "__main__":
 
     bridge = Bridge()
 
-    # Make sure the path to your QML is correct
     qml_path = Path(__file__).parent / "UI" / "main.qml"
-    
-    # Set initial properties BEFORE loading
-    engine.setInitialProperties({"python_bridge": bridge})
+
+    engine.rootContext().setContextProperty("python_bridge", bridge)
     engine.load(str(qml_path))
 
     if not engine.rootObjects():
         sys.exit(-1)
+
     sys.exit(app.exec())
