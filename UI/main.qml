@@ -325,7 +325,7 @@ ApplicationWindow {
                 id: downloadVideoButton
                 Layout.fillWidth: true
                 Layout.preferredHeight: 45
-                text: "Download Video"
+                text: "Download Video with Mask Overlay"
                 background: Rectangle {
                     color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
                     radius: 8
@@ -345,7 +345,7 @@ ApplicationWindow {
                 id: downloadMaskDataButton
                 Layout.fillWidth: true
                 Layout.preferredHeight: 45
-                text: "Download BBox (CSV)" // Updated label for bounding box export
+                text: "Download Mask BBoxes (CSV)" // Updated label for bounding box export
                 background: Rectangle {
                     color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
                     radius: 8
