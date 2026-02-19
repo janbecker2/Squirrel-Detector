@@ -114,6 +114,7 @@ class Sam3VideoSegmenter:
                 (w, h)
             )
 
+        self.processed_frames = []
         total_frames = len(self.video_frames)
         start_time = time.time()
 
@@ -164,7 +165,8 @@ class Sam3VideoSegmenter:
             raise ValueError("Load a video first.")
 
         self.mask_areas = []
-        processed_frames = []
+        # FIX: Change local variable to instance variable
+        self.processed_frames = [] 
         total_frames = len(self.video_frames)
         start_time = time.time()
 
@@ -184,7 +186,8 @@ class Sam3VideoSegmenter:
                 frame = cv.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
             self.mask_areas.append(mask_area)
-            processed_frames.append(frame)
+            # FIX: Append to the instance variable
+            self.processed_frames.append(frame) 
 
             if show_live:
                 cv.imshow("Segmented Video", frame)
@@ -195,7 +198,6 @@ class Sam3VideoSegmenter:
             avg_per_frame = elapsed / i
             remaining_time = avg_per_frame * (total_frames - i)
             
-            # --- Keep your original print logic ---
             status_text = (
                 f"Frame {i}/{total_frames} processed. "
                 f"Elapsed: {elapsed:.1f}s, "
@@ -203,30 +205,12 @@ class Sam3VideoSegmenter:
             )
             print(status_text, end="\r")
 
-            # --- New: Send the same text to the UI callback ---
             if status_callback:
                 status_callback(status_text)
 
         cv.destroyAllWindows()
         print("\nFinished processing all frames")
-        return processed_frames
-    
-    
-
-    def export_video(self, frames, output_path, fps=30):
-        if not frames:
-            raise ValueError("No frames to export")
-        h, w = frames[0].shape[:2]
-        writer = cv.VideoWriter(
-            output_path,
-            cv.VideoWriter_fourcc(*"mp4v"),
-            fps,
-            (w, h)
-        )
-        for frame in frames:
-            writer.write(frame)
-        writer.release()
-        print(f"Video exported to {output_path}")
+        return self.processed_frames
 
     def generate_graph(self):
         if not hasattr(self, "mask_areas") or not self.mask_areas:
@@ -306,25 +290,23 @@ class Sam3VideoSegmenter:
             print(f"Error exporting CSV: {e}")
             return False
 
-    def export_video(self, output_path, fps=30):
-        """Saves the frames stored in processed_frames as an MP4 file."""
+    def export_video(self, frames, output_path, fps=30): # Add 'frames' here
+        """Saves the provided frames as an MP4 file."""
         # Ensure we have frames to save
-        if not hasattr(self, 'processed_frames') or not self.processed_frames:
-            print("Error: No processed frames found. Run propagation first.")
+        if not frames:
+            print("Error: No frames provided for export.")
             return False
 
         try:
             # Get dimensions from the first frame
-            h, w = self.processed_frames[0].shape[:2]
+            h, w = frames[0].shape[:2]
             
             # Define the codec and create VideoWriter object
-            # 'mp4v' is standard for MP4 files
             fourcc = cv.VideoWriter_fourcc(*'mp4v')
             writer = cv.VideoWriter(output_path, fourcc, fps, (w, h))
 
-            for frame in self.processed_frames:
-                # OpenCV uses BGR, but we often store processed frames in RGB for QML
-                # If your processed_frames are RGB, convert back to BGR for the writer
+            for frame in frames:
+                # Convert back to BGR for OpenCV VideoWriter
                 writer.write(cv.cvtColor(frame, cv.COLOR_RGB2BGR))
 
             writer.release()
