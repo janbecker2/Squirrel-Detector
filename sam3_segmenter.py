@@ -159,7 +159,7 @@ class Sam3VideoSegmenter:
 
         print("\nFinished processing all frames")
     
-    def propagate_video(self, show_live=False):
+    def propagate_video(self, show_live=False, status_callback=None): # Add status_callback
         if self.video_frames is None:
             raise ValueError("Load a video first.")
 
@@ -194,16 +194,24 @@ class Sam3VideoSegmenter:
             elapsed = time.time() - start_time
             avg_per_frame = elapsed / i
             remaining_time = avg_per_frame * (total_frames - i)
-            print(
+            
+            # --- Keep your original print logic ---
+            status_text = (
                 f"Frame {i}/{total_frames} processed. "
                 f"Elapsed: {elapsed:.1f}s, "
-                f"Remaining: {remaining_time:.1f}s",
-                end="\r"
+                f"Remaining: {remaining_time:.1f}s"
             )
+            print(status_text, end="\r")
+
+            # --- New: Send the same text to the UI callback ---
+            if status_callback:
+                status_callback(status_text)
 
         cv.destroyAllWindows()
         print("\nFinished processing all frames")
         return processed_frames
+    
+    
 
     def export_video(self, frames, output_path, fps=30):
         if not frames:
@@ -277,5 +285,24 @@ class Sam3VideoSegmenter:
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
         return f"data:image/png;base64,{img_base64}"
 
+    def export_graph_csv(self, output_path):
+        """Exports the mask_areas data to a CSV file."""
+        if not hasattr(self, "mask_areas") or not self.mask_areas:
+            print("No data to export.")
+            return False
 
+        try:
+            import csv
+            with open(output_path, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                # Header
+                writer.writerow(["Frame", "Masked_Pixels"])
+                # Data
+                for idx, area in enumerate(self.mask_areas):
+                    writer.writerow([idx, area])
+            print(f"CSV exported successfully to {output_path}")
+            return True
+        except Exception as e:
+            print(f"Error exporting CSV: {e}")
+            return False
 

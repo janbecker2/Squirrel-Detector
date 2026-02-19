@@ -37,11 +37,13 @@ class Bridge(QObject):
     frameUpdated = Signal() # Signal QML to refresh the image provider
     propagationFinished = Signal()
     chartImageUpdated = Signal(str)
-
+    # 1. Define the status signal to carry the text string to QML
+    statusUpdated = Signal(str) 
 
     def __init__(self, provider):
         super().__init__()
         self.provider = provider
+        # Ensure target_size matches your processing needs
         self.segmenter = Sam3VideoSegmenter(target_size=1024)
         
         self.frame_timer = QTimer()
@@ -72,6 +74,7 @@ class Bridge(QObject):
 
         if total_frames > 0:
             self.pending_frame_idx = 0
+            # Use invokeMethod to ensure GUI updates happen on the main thread
             QMetaObject.invokeMethod(self, "_process_frame", Qt.QueuedConnection)
 
     @Slot(int)
@@ -87,20 +90,19 @@ class Bridge(QObject):
         frame_idx = self.pending_frame_idx
         self.pending_frame_idx = None
 
+        # showSingleFrame should return a RGB/BGR numpy array
         frame_output = self.segmenter.showSingleFrame(frame_idx, return_frame_only=True)
 
-        self.provider.update_frame(frame_output)
-        
-        # Notify QML
-        self.frameUpdated.emit()
+        if frame_output is not None:
+            self.provider.update_frame(frame_output)
+            self.frameUpdated.emit()
     
     @Slot()
     def propagate_video(self):
         def worker():
             try:
-                self.segmenter.propagate_video()
-                # Use QMetaObject to ensure generate_graph runs on the main thread
-                QMetaObject.invokeMethod(self, "generate_graph", Qt.QueuedConnection)
+                # 2. Pass the signal emitter as the callback to the segmenter
+                self.segmenter.propagate_video(status_callback=self.statusUpdated.emit)
             except Exception as e:
                 print(f"Propagation error: {e}")
             finally:
@@ -108,23 +110,39 @@ class Bridge(QObject):
 
         threading.Thread(target=worker, daemon=True).start()
 
-        
     @Slot()
     def generate_graph(self):
-        # Double check data exists
-        if not self.segmenter.mask_areas:
+        if not hasattr(self.segmenter, 'mask_areas') or not self.segmenter.mask_areas:
             print("No mask data available")
             return
 
-        # Ensure we have standard Python ints
+        # Convert potentially complex types (like numpy ints) to standard Python ints
         chart_data = [int(x) for x in self.segmenter.mask_areas]
         
-        # Generate the base64 string
+        # This should return a base64 encoded string or a temporary file path
         graph_url = self.segmenter.generate_graph_image(chart_data)
         
         if graph_url:
             print("Graph generated successfully, emitting signal...")
             self.chartImageUpdated.emit(graph_url)
+            
+    @Slot(str)
+    def download_csv(self, file_url):
+        # Convert QML file URL to local system path
+        path = file_url.replace("file:///", "")
+        if sys.platform == "win32":
+            path = path.replace("/", "\\")
+            if path.startswith("\\") and ":" in path:
+                path = path[1:]
+
+        # Run in a thread to keep UI responsive
+        def worker():
+            success = self.segmenter.export_graph_csv(path)
+            # You could emit a signal here to show a 'Download Complete' message
+            if success:
+                print("CSV Downloaded.")
+
+        threading.Thread(target=worker, daemon=True).start()
 
 
 

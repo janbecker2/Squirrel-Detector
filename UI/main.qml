@@ -9,9 +9,11 @@ ApplicationWindow {
     id: window
     visible: true
     width: 1100
-    height: 900
+    height: 950 // Slightly increased height for the new buttons
     title: "Squirrel Video Viewer"
     color: "#1e1e2e"
+
+    property string propagationStatus: "Processing Video..."
 
     ColumnLayout {
         anchors.fill: parent
@@ -35,7 +37,6 @@ ApplicationWindow {
                 fillMode: Image.PreserveAspectFit
                 source: "image://frames/current" 
                 cache: false 
-                // Only show image once video is actually loaded to avoid placeholder "rectangles"
                 visible: frameSlider.to > 1 
                 opacity: uploadButton.loading || propagateButton.loading ? 0.3 : 1.0
                 Behavior on opacity { NumberAnimation { duration: 250 } }
@@ -46,44 +47,58 @@ ApplicationWindow {
                 text: "No Video Loaded"
                 anchors.centerIn: parent
                 color: "#585b70"
-                font.pixelSize: 20
+                font.pixelSize: 24
             }
 
-            // Spinner Overlay
             Item {
                 anchors.fill: parent
                 visible: uploadButton.loading || propagateButton.loading
-                Canvas {
-                    id: loadingCanvas
+                
+                ColumnLayout {
                     anchors.centerIn: parent
-                    width: 60; height: 60
-                    property real angle: 0
-                    Timer {
-                        running: uploadButton.loading || propagateButton.loading
-                        repeat: true; interval: 16
-                        onTriggered: { loadingCanvas.angle += 0.15; loadingCanvas.requestPaint() }
+                    spacing: 20
+
+                    Canvas {
+                        id: loadingCanvas
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 60; height: 60
+                        property real angle: 0
+                        Timer {
+                            running: uploadButton.loading || propagateButton.loading
+                            repeat: true; interval: 16
+                            onTriggered: { loadingCanvas.angle += 0.15; loadingCanvas.requestPaint() }
+                        }
+                        onPaint: {
+                            var ctx = getContext("2d");
+                            ctx.reset();
+                            ctx.translate(width / 2, height / 2);
+                            ctx.rotate(loadingCanvas.angle);
+                            ctx.beginPath();
+                            ctx.lineWidth = 4; ctx.strokeStyle = "#89b4fa"; ctx.lineCap = "round";
+                            ctx.arc(0, 0, 25, 0, Math.PI * 1.5); ctx.stroke();
+                        }
                     }
-                    onPaint: {
-                        var ctx = getContext("2d");
-                        ctx.reset();
-                        ctx.translate(width / 2, height / 2);
-                        ctx.rotate(loadingCanvas.angle);
-                        ctx.beginPath();
-                        ctx.lineWidth = 4; ctx.strokeStyle = "#89b4fa"; ctx.lineCap = "round";
-                        ctx.arc(0, 0, 25, 0, Math.PI * 1.5); ctx.stroke();
+
+                    Text {
+                        id: statusText
+                        text: propagateButton.loading ? window.propagationStatus : "Processing Video..."
+                        Layout.alignment: Qt.AlignHCenter
+                        color: "#89b4fa"
+                        font.pixelSize: 14
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
                     }
                 }
             }
         }
 
         // ==========================================
-        // 2. CONTROLS ROW (Buttons LEFT, Slider RIGHT)
+        // 2. CONTROLS ROW
         // ==========================================
         RowLayout {
             Layout.fillWidth: true
             spacing: 20
 
-            // Left Side: Action Buttons Section
             RowLayout {
                 spacing: 10
                 Layout.alignment: Qt.AlignBottom 
@@ -112,7 +127,6 @@ ApplicationWindow {
                     Layout.preferredHeight: 45
                     property bool loading: false
                     text: loading ? "Working..." : "Propagate Video"
-                    // Only enabled if a video is loaded (Total frames > 1)
                     enabled: frameSlider.to > 1 && !loading && !uploadButton.loading
                     background: Rectangle {
                         color: propagateButton.enabled ? (propagateButton.down ? "#f5c2e7" : "#cba6f7") : "#313244"
@@ -131,20 +145,18 @@ ApplicationWindow {
                 }
             }
 
-            // Right Side: Slider Section
             ColumnLayout {
                 Layout.fillWidth: true 
                 spacing: 2
                 RowLayout {
                     Text { text: "Frame: " + Math.round(frameSlider.value); color: "#cdd6f4"; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Text { text: "Total: " + frameSlider.to; color: "#a6adc8"; font.pixelSize: 12 }
+                    Text { text: "Total: " + (frameSlider.to > 1 ? frameSlider.to : 0); color: "#a6adc8"; font.pixelSize: 12 }
                 }
                 Slider {
                     id: frameSlider
                     Layout.fillWidth: true
                     from: 0; to: 1; stepSize: 1
-                    // Only enabled if a video is loaded
                     enabled: to > 1 && !uploadButton.loading && !propagateButton.loading
                     onMoved: if (typeof python_bridge !== "undefined") python_bridge.request_frame(value)
                 }
@@ -172,39 +184,65 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     text: "Chart will appear after propagation"
                     color: "#585b70"
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     visible: chartImage.source == ""
                 }
             }
         }
 
-        // =========================
-        // 4. DOWNLOAD CHART BUTTON
-        // =========================
-        Button {
-            id: downloadChartButton
+        // ==========================================
+        // 4. DOWNLOAD OPTIONS ROW
+        // ==========================================
+        RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 45
-            text: "Download Chart"
+            spacing: 15
             enabled: chartImage.source != ""
-            background: Rectangle {
-                color: downloadChartButton.enabled ? (downloadChartButton.down ? "#45475a" : "#585b70") : "#2a2b3d"
-                radius: 8
-                border.color: "#45475a"
+
+            Button {
+                id: downloadChartButton
+                Layout.fillWidth: true
+                Layout.preferredHeight: 45
+                text: "Download Graph (PNG)"
+                background: Rectangle {
+                    color: parent.enabled ? (parent.down ? "#45475a" : "#585b70") : "#2a2b3d"
+                    radius: 8
+                    border.color: "#45475a"
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? "white" : "#45475a"
+                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: chartSaveDialog.open()
             }
-            contentItem: Text {
-                text: downloadChartButton.text
-                color: downloadChartButton.enabled ? "white" : "#45475a"
-                font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-            }
-            onClicked: {
-                console.log("Download Chart clicked")
+
+            Button {
+                id: downloadCsvButton
+                Layout.fillWidth: true
+                Layout.preferredHeight: 45
+                text: "Download Data (CSV)"
+                background: Rectangle {
+                    color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
+                    radius: 8
+                    border.color: "#45475a"
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? "white" : "#45475a"
+                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: csvSaveDialog.open()
             }
         }
     }
 
+    // ==========================================
+    // DIALOGS
+    // ==========================================
     FileDialog {
         id: videoFileDialog
+        title: "Select Video"
+        nameFilters: ["Video files (*.mp4 *.avi *.mov *.mkv)"]
         onAccepted: {
             uploadButton.loading = true;
             chartImage.source = "";
@@ -213,22 +251,58 @@ ApplicationWindow {
         }
     }
 
+    FileDialog {
+        id: chartSaveDialog
+        title: "Save Graph as Image"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["PNG Image (*.png)"]
+        currentFile: "squirrel_mask_graph.png"
+        onAccepted: {
+            if (typeof python_bridge !== "undefined")
+                python_bridge.save_chart_as_image(selectedFile);
+        }
+    }
+
+    FileDialog {
+        id: csvSaveDialog
+        title: "Save Graph Data as CSV"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["CSV File (*.csv)"]
+        currentFile: "squirrel_mask_data.csv"
+        onAccepted: {
+            if (typeof python_bridge !== "undefined")
+                python_bridge.download_csv(selectedFile);
+        }
+    }
+
+    // ==========================================
+    // CONNECTIONS
+    // ==========================================
     Connections {
         target: python_bridge
         ignoreUnknownSignals: true
+
         function onFrameUpdated() {
             var oldSource = videoFrame.source;
             videoFrame.source = ""; 
             videoFrame.source = oldSource;
         }
+
+        function onStatusUpdated(status) {
+            window.propagationStatus = status
+        }
+
         function onMaxFrameChanged(max) {
             frameSlider.to = max;
             uploadButton.loading = false;
         }
+
         function onPropagationFinished() {
             propagateButton.loading = false
+            window.propagationStatus = "Processing Video..."
             python_bridge.request_frame(frameSlider.value)
         }
+
         function onChartImageUpdated(imgData) {
             chartImage.source = imgData
         }
