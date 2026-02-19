@@ -165,7 +165,7 @@ ApplicationWindow {
 
                     Text {
                         id: statusText
-                        text: propagateButton.loading ? window.propagationStatus : "Processing Video..."
+                        text: propagateButton.loading ? window.propagationStatus : "Loading Video..."
                         Layout.alignment: Qt.AlignHCenter
                         color: "#89b4fa"
                         font.pixelSize: 14

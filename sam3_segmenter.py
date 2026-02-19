@@ -234,6 +234,27 @@ class Sam3VideoSegmenter:
 
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
         return f"data:image/png;base64,{img_base64}"
+    
+    def export_graph_csv(self, output_path):
+        """Exports the mask_areas data to a CSV file."""
+        if not hasattr(self, "mask_areas") or not self.mask_areas:
+            print("No data to export.")
+            return False
+
+        try:
+            import csv
+            with open(output_path, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                # Header
+                writer.writerow(["Frame", "Masked_Pixels"])
+                # Data
+                for idx, area in enumerate(self.mask_areas):
+                    writer.writerow([idx, area])
+            print(f"CSV exported successfully to {output_path}")
+            return True
+        except Exception as e:
+            print(f"Error exporting CSV: {e}")
+            return False
 
     def export_mask_csv(self, output_path):
         """
@@ -266,4 +287,30 @@ class Sam3VideoSegmenter:
             
         except Exception as e:
             print(f"CSV Export Error: {e}")
+            return False
+        
+    def export_video(self, frames, output_path, fps=30): # Add 'frames' here
+        """Saves the provided frames as an MP4 file."""
+        # Ensure we have frames to save
+        if not frames:
+            print("Error: No frames provided for export.")
+            return False
+
+        try:
+            # Get dimensions from the first frame
+            h, w = frames[0].shape[:2]
+            
+            # Define the codec and create VideoWriter object
+            fourcc = cv.VideoWriter_fourcc(*'mp4v')
+            writer = cv.VideoWriter(output_path, fourcc, fps, (w, h))
+
+            for frame in frames:
+                # Convert back to BGR for OpenCV VideoWriter
+                writer.write(cv.cvtColor(frame, cv.COLOR_RGB2BGR))
+
+            writer.release()
+            print(f"Video exported successfully to {output_path}")
+            return True
+        except Exception as e:
+            print(f"Failed to export video: {e}")
             return False
