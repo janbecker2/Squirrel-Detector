@@ -1,16 +1,19 @@
 # GUI Framework
 PySide6>=6.6.0
 
-# AI and Deep Learning
 torch>=2.0.0
 torchvision
 transformers>=4.48.0
 accelerate>=0.26.0
 
-# Computer Vision and Data
 opencv-python>=4.8.0
 numpy>=1.24.0
 pandas>=2.0.0
+pillow>=10.0.0
 
-# Visualization
+av
+timm>=0.9.0
+einops
+python-magic; sys_platform == 'linux' or sys_platform == 'darwin'
+
 matplotlib>=3.7.0
