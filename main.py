@@ -9,7 +9,7 @@ from PySide6.QtQuick import QQuickImageProvider
 import cv2 as cv
 from sam3_segmenter import Sam3VideoSegmenter
 
-class FrameProvider(QQuickImageProvider):
+class FrameProvider(QQuickImageProvider): 
     def __init__(self):
         super().__init__(QQuickImageProvider.Image)
         self.current_frame = QImage()
@@ -36,6 +36,8 @@ class Bridge(QObject):
     maxFrameChanged = Signal(int)
     frameUpdated = Signal() # Signal QML to refresh the image provider
     propagationFinished = Signal()
+    chartImageUpdated = Signal(str)
+
 
     def __init__(self, provider):
         super().__init__()
@@ -48,9 +50,6 @@ class Bridge(QObject):
         self.pending_frame_idx = None
         
         self.propagationFinished.connect(self.generate_graph)
-        
-        chartDataUpdated = Signal(list, int, float)
-
 
     @Slot(str)
     def load_video(self, video_url):
@@ -100,10 +99,11 @@ class Bridge(QObject):
         def worker():
             try:
                 self.segmenter.propagate_video()
+                # Use QMetaObject to ensure generate_graph runs on the main thread
+                QMetaObject.invokeMethod(self, "generate_graph", Qt.QueuedConnection)
             except Exception as e:
                 print(f"Propagation error: {e}")
             finally:
-                # 🔹 Emit signal to trigger graph generation
                 self.propagationFinished.emit()
 
         threading.Thread(target=worker, daemon=True).start()
@@ -111,17 +111,20 @@ class Bridge(QObject):
         
     @Slot()
     def generate_graph(self):
-        if not hasattr(self.segmenter, "mask_areas") or not self.segmenter.mask_areas:
-            print("No mask data available. Run propagate_video() first.")
+        # Double check data exists
+        if not self.segmenter.mask_areas:
+            print("No mask data available")
             return
 
-        chart_data, current_max = self.segmenter.generate_graph()
-        max_frames = len(chart_data)
+        # Ensure we have standard Python ints
+        chart_data = [int(x) for x in self.segmenter.mask_areas]
         
-        # Emit to QML Canvas
-        self.chartDataUpdated.emit(chart_data, max_frames, current_max)
-        print("Chart data sent to QML Canvas")
-
+        # Generate the base64 string
+        graph_url = self.segmenter.generate_graph_image(chart_data)
+        
+        if graph_url:
+            print("Graph generated successfully, emitting signal...")
+            self.chartImageUpdated.emit(graph_url)
 
 
 

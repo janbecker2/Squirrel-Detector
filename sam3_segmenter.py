@@ -1,3 +1,5 @@
+import base64
+import io
 import numpy as np
 import torch
 from transformers import Sam3VideoModel, Sam3VideoProcessor
@@ -8,6 +10,7 @@ from transformers.video_utils import load_video
 import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 class Sam3VideoSegmenter:
     def __init__(self, model_id="facebook/sam3", target_size=512):
@@ -224,4 +227,55 @@ class Sam3VideoSegmenter:
         data = self.mask_areas
         max_val = max(data) if data else 1.0
         return data, max_val
+    
+    def generate_graph_image(self, chart_data):
+        if not chart_data or len(chart_data) == 0:
+            return None
+
+        import matplotlib
+        matplotlib.use('Agg') 
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
+
+        # 1. High DPI (160+) ensures the larger text stays crisp and doesn't pixelate
+        fig, ax = plt.subplots(figsize=(14, 4), dpi=1000) 
+        
+        fig.patch.set_facecolor('#313244')
+        ax.set_facecolor('#313244')
+
+        ax.plot(chart_data, color="#f38ba8", linewidth=3, antialiased=True)
+        ax.fill_between(range(len(chart_data)), chart_data, color="#f38ba8", alpha=0.15)
+
+        # 2. BOLD and LARGE Labels
+        # Increased fontsize to 14 for the main axis titles
+        ax.set_xlabel("Video Frame", color="#cdd6f4", fontsize=17, fontweight='bold', labelpad=12)
+        ax.set_ylabel("Masked Pixels", color="#cdd6f4", fontsize=17, fontweight='bold', labelpad=12)
+        
+        # 3. LARGE Tick Labels
+        # Increased labelsize to 12 for the numbers on the axes
+        ax.tick_params(axis='both', colors='#a6adc8', labelsize=15)
+        
+        # Use a clean locator to keep the larger numbers from overlapping
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=8))
+
+        # 4. Thicker Spines to match the larger text weight
+        for spine in ax.spines.values():
+            spine.set_edgecolor('#45475a')
+            spine.set_linewidth(2.0)
+
+        ax.grid(True, linestyle=':', alpha=0.2, color="#cdd6f4")
+
+        # 5. Added extra padding in tight_layout to accommodate larger fonts
+        plt.tight_layout(pad=1.5)
+
+        buf = io.BytesIO()
+        # bbox_inches='tight' is critical here so the larger text doesn't get clipped
+        fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)
+
+        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        return f"data:image/png;base64,{img_base64}"
+
+
 
