@@ -306,3 +306,30 @@ class Sam3VideoSegmenter:
             print(f"Error exporting CSV: {e}")
             return False
 
+    def export_video(self, output_path, fps=30):
+        """Saves the frames stored in processed_frames as an MP4 file."""
+        # Ensure we have frames to save
+        if not hasattr(self, 'processed_frames') or not self.processed_frames:
+            print("Error: No processed frames found. Run propagation first.")
+            return False
+
+        try:
+            # Get dimensions from the first frame
+            h, w = self.processed_frames[0].shape[:2]
+            
+            # Define the codec and create VideoWriter object
+            # 'mp4v' is standard for MP4 files
+            fourcc = cv.VideoWriter_fourcc(*'mp4v')
+            writer = cv.VideoWriter(output_path, fourcc, fps, (w, h))
+
+            for frame in self.processed_frames:
+                # OpenCV uses BGR, but we often store processed frames in RGB for QML
+                # If your processed_frames are RGB, convert back to BGR for the writer
+                writer.write(cv.cvtColor(frame, cv.COLOR_RGB2BGR))
+
+            writer.release()
+            print(f"Video exported successfully to {output_path}")
+            return True
+        except Exception as e:
+            print(f"Failed to export video: {e}")
+            return False

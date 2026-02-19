@@ -143,6 +143,21 @@ class Bridge(QObject):
                 print("CSV Downloaded.")
 
         threading.Thread(target=worker, daemon=True).start()
+        
+    @Slot(str)
+    def download_video(self, file_url):
+        """Converts QML URL to path and triggers the segmenter export."""
+        path = self._parse_path(file_url) # Using your existing path parser
+
+        def worker():
+            # Trigger the export in the segmenter
+            success = self.segmenter.export_video(path)
+            if success:
+                self.operationFinished.emit("Video Exported Successfully!")
+            else:
+                self.operationFinished.emit("Video Export Failed.")
+
+        threading.Thread(target=worker, daemon=True).start()
 
 
 

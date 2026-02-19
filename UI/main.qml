@@ -233,6 +233,19 @@ ApplicationWindow {
                 }
                 onClicked: csvSaveDialog.open()
             }
+
+            Button {
+                id: downloadVideoButton
+                text: "Download Video"
+                Layout.fillWidth: true
+                enabled: chartImage.source != "" // Only enabled after propagation
+                onClicked: videoSaveDialog.open()
+                
+                background: Rectangle {
+                    color: parent.enabled ? (parent.down ? "#45475a" : "#cba6f7") : "#2a2b3d"
+                    radius: 8
+                }
+            }
         }
     }
 
@@ -272,6 +285,18 @@ ApplicationWindow {
         onAccepted: {
             if (typeof python_bridge !== "undefined")
                 python_bridge.download_csv(selectedFile);
+        }
+    }
+
+    FileDialog {
+        id: videoSaveDialog
+        title: "Save Processed Video"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["MP4 files (*.mp4)"]
+        currentFile: "processed_squirrel.mp4"
+        onAccepted: {
+            if (typeof python_bridge !== "undefined")
+                python_bridge.download_video(selectedFile)
         }
     }
 
