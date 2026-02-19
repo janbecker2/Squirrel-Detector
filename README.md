@@ -16,14 +16,6 @@ Built with PySide6 (Qt/QML) and Python, this application allows users to:
 
 Squirrel-App combines a modern QML-based UI with a Python backend that performs AI-based video segmentation.
 
-### System Workflow
-
-1. Load video frames
-2. Apply SAM3 segmentation on single images or
-3. Propagate segmentation across the full video
-4. Generate a graph
-6. Export results
-
 ---
 
 ## Features
@@ -53,39 +45,6 @@ Squirrel-App/
 ├── requirements.txt
 └── README.md
 ```
----
-
-## Architecture
-
-### Frontend (QML + PySide6)
-
-- Built with Qt Quick (QML)
-- Uses `QQuickImageProvider` for dynamic frame updates
-- Displays:
-  - Video frames
-  - Graph image
-  - Status messages
-- Splash screen with fade transition
-
-### Backend (Python)
-
-`Sam3VideoSegmenter`
-
-Responsibilities:
-
-- Loads video
-- Applies segmentation prompt
-- Propagates masks
-- Computes mask areas
-- Generates graph images
-- Exports CSV and video
-
-### Core Technologies
-
-- PyTorch
-- OpenCV
-- Matplotlib (Agg backend)
-- Python threading
 
 ---
 
@@ -94,6 +53,7 @@ Responsibilities:
 - Python 3.10+
 - PySide6
 - torch
+- torchvsion
 - transformers
 - accelerate
 - opencv-python
