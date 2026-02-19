@@ -9,7 +9,7 @@ ApplicationWindow {
     id: window
     visible: true
     width: 1100
-    height: 950 // Slightly increased height for the new buttons
+    height: 980
     title: "Squirrel Video Viewer"
     color: "#1e1e2e"
 
@@ -21,12 +21,84 @@ ApplicationWindow {
         spacing: 15
 
         // ==========================================
-        // 1. VIDEO DISPLAY AREA (Takes 50% height)
+        // HEADER ROW: Logo, Title, and Help
+        // ==========================================
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 150 
+            // Negative vertical margins tighten the gap caused by the 150px height
+            Layout.topMargin: -20     
+            Layout.bottomMargin: -20 
+            Layout.leftMargin: -20       // Ensures no shift from the parent ColumnLayout boundary
+            spacing: 15
+
+            Image {
+                source: "assets/logo_transparent.png"
+                Layout.preferredWidth: 150
+                Layout.preferredHeight: 150
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                // This is the key: force the image content to the start of its layout box
+                horizontalAlignment: Image.AlignLeft
+                verticalAlignment: Image.AlignVCenter 
+            }
+
+            ColumnLayout {
+                spacing: 0
+                Layout.alignment: Qt.AlignVCenter
+                // Pull text closer to the logo box to account for any logo transparency
+                Layout.leftMargin: -25 
+
+                Text {
+                    text: "Squirrel Detector"
+                    color: "#f5e0dc" // Rosewater
+                    font.pixelSize: 36
+                    font.bold: true
+                }
+                
+            }
+
+            Item { Layout.fillWidth: true } // Spacer pushes help button to the right
+
+            Button {
+                id: helpButton
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 36
+                Layout.alignment: Qt.AlignVCenter
+                
+                background: Rectangle {
+                    color: helpButton.hovered ? "#313244" : "transparent"
+                    radius: 18
+                    border.color: helpButton.hovered ? "#89b4fa" : "transparent"
+                    border.width: 1
+                }
+
+                contentItem: Text {
+                    text: "?"
+                    color: helpButton.hovered ? "#89b4fa" : "#585b70"
+                    font.pixelSize: 18
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                ToolTip.visible: hovered
+                ToolTip.text: "Open Documentation"
+
+                onClicked: {
+                    if (typeof python_bridge !== "undefined")
+                        python_bridge.open_help_link();
+                }
+            }
+        }
+
+        // ==========================================
+        // 1. VIDEO DISPLAY AREA
         // ==========================================
         Rectangle {
             id: videoContainer
             Layout.fillWidth: true
-            Layout.preferredHeight: parent.height * 0.5 
+            Layout.preferredHeight: parent.height * 0.45
             color: "#181825"
             radius: 12
             clip: true
@@ -35,11 +107,15 @@ ApplicationWindow {
                 id: videoFrame
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectFit
-                source: "image://frames/current" 
-                cache: false 
-                visible: frameSlider.to > 1 
+                source: "image://frames/current"
+                cache: false
+                visible: frameSlider.to > 1
                 opacity: uploadButton.loading || propagateButton.loading ? 0.3 : 1.0
-                Behavior on opacity { NumberAnimation { duration: 250 } }
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 250
+                    }
+                }
             }
 
             Text {
@@ -53,7 +129,7 @@ ApplicationWindow {
             Item {
                 anchors.fill: parent
                 visible: uploadButton.loading || propagateButton.loading
-                
+
                 ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 20
@@ -61,12 +137,17 @@ ApplicationWindow {
                     Canvas {
                         id: loadingCanvas
                         Layout.alignment: Qt.AlignHCenter
-                        width: 60; height: 60
+                        width: 60
+                        height: 60
                         property real angle: 0
                         Timer {
                             running: uploadButton.loading || propagateButton.loading
-                            repeat: true; interval: 16
-                            onTriggered: { loadingCanvas.angle += 0.15; loadingCanvas.requestPaint() }
+                            repeat: true
+                            interval: 16
+                            onTriggered: {
+                                loadingCanvas.angle += 0.15;
+                                loadingCanvas.requestPaint();
+                            }
                         }
                         onPaint: {
                             var ctx = getContext("2d");
@@ -74,8 +155,11 @@ ApplicationWindow {
                             ctx.translate(width / 2, height / 2);
                             ctx.rotate(loadingCanvas.angle);
                             ctx.beginPath();
-                            ctx.lineWidth = 4; ctx.strokeStyle = "#89b4fa"; ctx.lineCap = "round";
-                            ctx.arc(0, 0, 25, 0, Math.PI * 1.5); ctx.stroke();
+                            ctx.lineWidth = 4;
+                            ctx.strokeStyle = "#89b4fa";
+                            ctx.lineCap = "round";
+                            ctx.arc(0, 0, 25, 0, Math.PI * 1.5);
+                            ctx.stroke();
                         }
                     }
 
@@ -101,7 +185,7 @@ ApplicationWindow {
 
             RowLayout {
                 spacing: 10
-                Layout.alignment: Qt.AlignBottom 
+                Layout.alignment: Qt.AlignBottom
 
                 Button {
                     id: uploadButton
@@ -114,9 +198,12 @@ ApplicationWindow {
                         color: uploadButton.loading ? "#45475a" : (uploadButton.down ? "#74c7ec" : "#89b4fa")
                         radius: 8
                     }
-                    contentItem: Text { 
-                        text: uploadButton.text; color: "white"; font.bold: true; 
-                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter 
+                    contentItem: Text {
+                        text: uploadButton.text
+                        color: "white"
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: videoFileDialog.open()
                 }
@@ -133,32 +220,48 @@ ApplicationWindow {
                         radius: 8
                         border.color: propagateButton.enabled ? "transparent" : "#45475a"
                     }
-                    contentItem: Text { 
-                        text: propagateButton.text; color: propagateButton.enabled ? "white" : "#585b70"
-                        font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter 
+                    contentItem: Text {
+                        text: propagateButton.text
+                        color: propagateButton.enabled ? "white" : "#585b70"
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
-                        propagateButton.loading = true
+                        propagateButton.loading = true;
                         if (typeof python_bridge !== "undefined")
-                            python_bridge.propagate_video()
+                            python_bridge.propagate_video();
                     }
                 }
             }
 
             ColumnLayout {
-                Layout.fillWidth: true 
+                Layout.fillWidth: true
                 spacing: 2
                 RowLayout {
-                    Text { text: "Frame: " + Math.round(frameSlider.value); color: "#cdd6f4"; font.bold: true }
-                    Item { Layout.fillWidth: true }
-                    Text { text: "Total: " + (frameSlider.to > 1 ? frameSlider.to : 0); color: "#a6adc8"; font.pixelSize: 12 }
+                    Text {
+                        text: "Frame: " + Math.round(frameSlider.value)
+                        color: "#cdd6f4"
+                        font.bold: true
+                    }
+                    Item {
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: "Total: " + (frameSlider.to > 1 ? frameSlider.to : 0)
+                        color: "#a6adc8"
+                        font.pixelSize: 12
+                    }
                 }
                 Slider {
                     id: frameSlider
                     Layout.fillWidth: true
-                    from: 0; to: 1; stepSize: 1
+                    from: 0
+                    to: 1
+                    stepSize: 1
                     enabled: to > 1 && !uploadButton.loading && !propagateButton.loading
-                    onMoved: if (typeof python_bridge !== "undefined") python_bridge.request_frame(value)
+                    onMoved: if (typeof python_bridge !== "undefined")
+                        python_bridge.request_frame(value)
                 }
             }
         }
@@ -182,9 +285,9 @@ ApplicationWindow {
                 source: ""
                 Text {
                     anchors.centerIn: parent
+                    font.pixelSize: 18
                     text: "Chart will appear after propagation"
                     color: "#585b70"
-                    font.pixelSize: 18
                     visible: chartImage.source == ""
                 }
             }
@@ -211,7 +314,9 @@ ApplicationWindow {
                 contentItem: Text {
                     text: parent.text
                     color: parent.enabled ? "white" : "#45475a"
-                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: csvSaveDialog.open()
             }
@@ -229,7 +334,9 @@ ApplicationWindow {
                 contentItem: Text {
                     text: parent.text
                     color: parent.enabled ? "white" : "#45475a"
-                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: videoSaveDialog.open()
             }
@@ -238,7 +345,7 @@ ApplicationWindow {
                 id: downloadMaskDataButton
                 Layout.fillWidth: true
                 Layout.preferredHeight: 45
-                text: "Download Masks (CSV)"
+                text: "Download BBox (CSV)" // Updated label for bounding box export
                 background: Rectangle {
                     color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
                     radius: 8
@@ -247,7 +354,9 @@ ApplicationWindow {
                 contentItem: Text {
                     text: parent.text
                     color: parent.enabled ? "white" : "#45475a"
-                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: maskSaveDialog.open()
             }
@@ -266,18 +375,6 @@ ApplicationWindow {
             chartImage.source = "";
             if (typeof python_bridge !== "undefined")
                 python_bridge.load_video(selectedFile);
-        }
-    }
-
-    FileDialog {
-        id: chartSaveDialog
-        title: "Save Graph as Image"
-        fileMode: FileDialog.SaveFile
-        nameFilters: ["PNG Image (*.png)"]
-        currentFile: "squirrel_mask_graph.png"
-        onAccepted: {
-            if (typeof python_bridge !== "undefined")
-                python_bridge.save_chart_as_image(selectedFile);
         }
     }
 
@@ -307,17 +404,15 @@ ApplicationWindow {
 
     FileDialog {
         id: maskSaveDialog
-        title: "Save Mask Training Data as CSV"
+        title: "Save BBox Training Data as CSV"
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV File (*.csv)"]
-        currentFile: "squirrel_training_coords.csv"
+        currentFile: "squirrel_training_bbox.csv"
         onAccepted: {
             if (typeof python_bridge !== "undefined")
                 python_bridge.download_training_csv(selectedFile);
         }
     }
-
-    
 
     // ==========================================
     // CONNECTIONS
@@ -325,30 +420,25 @@ ApplicationWindow {
     Connections {
         target: python_bridge
         ignoreUnknownSignals: true
-
         function onFrameUpdated() {
-            var oldSource = videoFrame.source;
-            videoFrame.source = ""; 
-            videoFrame.source = oldSource;
+            var old = videoFrame.source;
+            videoFrame.source = "";
+            videoFrame.source = old;
         }
-
         function onStatusUpdated(status) {
-            window.propagationStatus = status
+            window.propagationStatus = status;
         }
-
         function onMaxFrameChanged(max) {
             frameSlider.to = max;
             uploadButton.loading = false;
         }
-
         function onPropagationFinished() {
-            propagateButton.loading = false
-            window.propagationStatus = "Processing Video..."
-            python_bridge.request_frame(frameSlider.value)
+            propagateButton.loading = false;
+            window.propagationStatus = "Processing Video...";
+            python_bridge.request_frame(frameSlider.value);
         }
-
         function onChartImageUpdated(imgData) {
-            chartImage.source = imgData
+            chartImage.source = imgData;
         }
     }
 }

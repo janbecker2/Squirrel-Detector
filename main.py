@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QObject, Slot, Signal, QTimer, QMetaObject, Qt, QPropertyAnimation
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import QObject, Slot, Signal, QTimer, QMetaObject, Qt, QPropertyAnimation, QUrl
+from PySide6.QtGui import QImage, QPixmap, QDesktopServices
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 
@@ -122,9 +122,9 @@ class Bridge(QObject):
             
     @Slot()
     def open_help_link(self):
-        """Opens the documentation or support link in the browser."""
-        url = QUrl("https://your-help-link.com") # Replace with your actual URL
-        QDesktopServices.openUrl(url)
+        """Opens the help documentation in the system browser."""
+        # Replace with your actual URL
+        QDesktopServices.openUrl(QUrl("https://github.com/janbecker2/Squirrel-App/blob/main/README.md"))
 
 # --- Execution ---
 if __name__ == "__main__":
