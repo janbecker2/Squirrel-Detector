@@ -111,6 +111,14 @@ class Bridge(QObject):
             self.operationFinished.emit("Video Exported Successfully!")
         except Exception:
             self.operationFinished.emit("Video Export Failed.")
+    
+    @Slot(str)
+    def download_training_csv(self, file_url):
+        path = self._parse_path(file_url)
+        if self.segmenter.export_mask_csv(path):
+            self.operationFinished.emit("Training CSV Exported Successfully!")
+        else:
+            self.operationFinished.emit("Training Export Failed: No mask data found.")
 
 # --- Execution ---
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import base64
 import io
+import csv
 import numpy as np
 import torch
 from transformers import Sam3VideoModel, Sam3VideoProcessor
@@ -101,99 +102,68 @@ class Sam3VideoSegmenter:
         cv.imshow("High Res Mask", frame)
         cv.waitKey(0)
         cv.destroyAllWindows()
-
-        
-    def propagate_video1(self, output_path=None):
-        writer = None
-        if output_path is not None:
-            h, w = self.video_frames[0].shape[:2]
-            writer = cv.VideoWriter(
-                output_path,
-                cv.VideoWriter_fourcc(*"mp4v"),
-                30,
-                (w, h)
-            )
-
-        self.processed_frames = []
-        total_frames = len(self.video_frames)
-        start_time = time.time()
-
-        for i, model_outputs in enumerate(
-                self.model.propagate_in_video_iterator(self.inference_session), 1):
-
-            frame_idx = model_outputs.frame_idx
-
-            processed_outputs = self.processor.postprocess_outputs(
-                self.inference_session,
-                model_outputs
-            )
-
-            frame = self.video_frames[frame_idx].copy()
-
-            if processed_outputs["masks"].numel() > 0:
-                mask = processed_outputs["masks"][0].detach().cpu().numpy().astype("uint8") * 255
-
-                overlay = frame.copy()
-                overlay[mask == 255] = [0, 255, 0]
-                alpha = 0.5
-                frame = cv.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
-
-            if cv.waitKey(1) & 0xFF == ord('q'):
-                break
-
-            if writer is not None:
-                writer.write(frame)
-
-            elapsed = time.time() - start_time
-            avg_per_frame = elapsed / i
-            remaining_time = avg_per_frame * (total_frames - i)
-            print(
-                f"Frame {i}/{total_frames} processed. "
-                f"Elapsed: {elapsed:.1f}s, "
-                f"Estimated remaining: {remaining_time:.1f}s",
-                end="\r"
-            )
-
-        cv.destroyAllWindows()
-        if writer is not None:
-            writer.release()
-
-        print("\nFinished processing all frames")
     
-    def propagate_video(self, show_live=False, status_callback=None): # Add status_callback
+    def propagate_video(self, show_live=False, status_callback=None):
         if self.video_frames is None:
             raise ValueError("Load a video first.")
 
+        # Initialize storage containers
         self.mask_areas = []
-        # FIX: Change local variable to instance variable
         self.processed_frames = [] 
+        self.mask_data_storage = [] # To store training coordinates
+        
         total_frames = len(self.video_frames)
         start_time = time.time()
 
+        # Iterate through the video using the SAM3 session
         for i, model_outputs in enumerate(self.model.propagate_in_video_iterator(self.inference_session), 1):
             frame_idx = model_outputs.frame_idx
             processed_outputs = self.processor.postprocess_outputs(self.inference_session, model_outputs)
-            frame = self.video_frames[frame_idx].copy()
+            
+            # Use the resized frame for calculations
+            current_frame = self.video_frames[frame_idx].copy()
+            h, w = current_frame.shape[:2]
 
             mask_area = 0
+            x_str, y_str = "", "" # Default empty strings for frames with no squirrel
+
+            # Check if any mask was detected in this frame
             if processed_outputs["masks"].numel() > 0:
-                mask = processed_outputs["masks"][0].detach().cpu().numpy().astype("uint8") * 255
-                mask_area = np.sum(mask > 0)
+                # Extract binary mask (0 or 1)
+                mask = processed_outputs["masks"][0].detach().cpu().numpy().astype("uint8")
+                
+                # 1. Calculate Area (sum of all True/1 pixels)
+                mask_area = int(np.sum(mask > 0))
 
-                overlay = frame.copy()
-                overlay[mask == 255] = [0, 255, 0]
-                alpha = 0.5
-                frame = cv.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+                # 2. Extract Training Coordinates (X;Y)
+                y_coords, x_coords = np.where(mask > 0)
+                if len(x_coords) > 0:
+                    x_str = ";".join(map(str, x_coords))
+                    y_str = ";".join(map(str, y_coords))
 
+                # 3. Create Visual Overlay for UI
+                overlay = current_frame.copy()
+                overlay[mask > 0] = [0, 255, 0] # Green tint
+                current_frame = cv.addWeighted(overlay, 0.5, current_frame, 0.5, 0)
+
+            # Store results in instance variables
             self.mask_areas.append(mask_area)
-            # FIX: Append to the instance variable
-            self.processed_frames.append(frame) 
+            self.processed_frames.append(current_frame)
+            self.mask_data_storage.append({
+                "idx": frame_idx, 
+                "w": w, 
+                "h": h, 
+                "x": x_str, 
+                "y": y_str
+            })
 
+            # Handle Live View (Optional)
             if show_live:
-                cv.imshow("Segmented Video", frame)
+                cv.imshow("Segmented Video", current_frame)
                 if cv.waitKey(1) & 0xFF == ord('q'):
                     break
 
+            # Calculate and send status updates
             elapsed = time.time() - start_time
             avg_per_frame = elapsed / i
             remaining_time = avg_per_frame * (total_frames - i)
@@ -203,22 +173,12 @@ class Sam3VideoSegmenter:
                 f"Elapsed: {elapsed:.1f}s, "
                 f"Remaining: {remaining_time:.1f}s"
             )
-            print(status_text, end="\r")
-
+            
             if status_callback:
                 status_callback(status_text)
 
         cv.destroyAllWindows()
-        print("\nFinished processing all frames")
         return self.processed_frames
-
-    def generate_graph(self):
-        if not hasattr(self, "mask_areas") or not self.mask_areas:
-            return [], 0.0
-
-        data = self.mask_areas
-        max_val = max(data) if data else 1.0
-        return data, max_val
     
     def generate_graph_image(self, chart_data):
         if not chart_data or len(chart_data) == 0:
@@ -269,49 +229,25 @@ class Sam3VideoSegmenter:
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
         return f"data:image/png;base64,{img_base64}"
 
-    def export_graph_csv(self, output_path):
-        """Exports the mask_areas data to a CSV file."""
-        if not hasattr(self, "mask_areas") or not self.mask_areas:
-            print("No data to export.")
+    def export_mask_csv(self, output_path):
+        """
+        Saves the coordinates collected during propagation to a CSV.
+        """
+        if not hasattr(self, "mask_data_storage") or not self.mask_data_storage:
+            print("No mask data found. Run propagate_video first.")
             return False
 
         try:
-            import csv
             with open(output_path, mode='w', newline='') as file:
                 writer = csv.writer(file)
-                # Header
-                writer.writerow(["Frame", "Masked_Pixels"])
-                # Data
-                for idx, area in enumerate(self.mask_areas):
-                    writer.writerow([idx, area])
-            print(f"CSV exported successfully to {output_path}")
-            return True
-        except Exception as e:
-            print(f"Error exporting CSV: {e}")
-            return False
+                # Header compatible with typical ML training scripts
+                writer.writerow(["frame_idx", "width", "height", "x_points", "y_points"])
 
-    def export_video(self, frames, output_path, fps=30): # Add 'frames' here
-        """Saves the provided frames as an MP4 file."""
-        # Ensure we have frames to save
-        if not frames:
-            print("Error: No frames provided for export.")
-            return False
-
-        try:
-            # Get dimensions from the first frame
-            h, w = frames[0].shape[:2]
+                for data in self.mask_data_storage:
+                    writer.writerow([data["idx"], data["w"], data["h"], data["x"], data["y"]])
             
-            # Define the codec and create VideoWriter object
-            fourcc = cv.VideoWriter_fourcc(*'mp4v')
-            writer = cv.VideoWriter(output_path, fourcc, fps, (w, h))
-
-            for frame in frames:
-                # Convert back to BGR for OpenCV VideoWriter
-                writer.write(cv.cvtColor(frame, cv.COLOR_RGB2BGR))
-
-            writer.release()
-            print(f"Video exported successfully to {output_path}")
+            print(f"Exported {len(self.mask_data_storage)} frames to {output_path}")
             return True
         except Exception as e:
-            print(f"Failed to export video: {e}")
+            print(f"CSV Export Error: {e}")
             return False

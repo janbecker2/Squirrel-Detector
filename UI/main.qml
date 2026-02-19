@@ -199,28 +199,10 @@ ApplicationWindow {
             enabled: chartImage.source != ""
 
             Button {
-                id: downloadChartButton
-                Layout.fillWidth: true
-                Layout.preferredHeight: 45
-                text: "Download Graph (PNG)"
-                background: Rectangle {
-                    color: parent.enabled ? (parent.down ? "#45475a" : "#585b70") : "#2a2b3d"
-                    radius: 8
-                    border.color: "#45475a"
-                }
-                contentItem: Text {
-                    text: parent.text
-                    color: parent.enabled ? "white" : "#45475a"
-                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                }
-                onClicked: chartSaveDialog.open()
-            }
-
-            Button {
                 id: downloadCsvButton
                 Layout.fillWidth: true
                 Layout.preferredHeight: 45
-                text: "Download Data (CSV)"
+                text: "Download Graph Data (CSV)"
                 background: Rectangle {
                     color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
                     radius: 8
@@ -236,15 +218,38 @@ ApplicationWindow {
 
             Button {
                 id: downloadVideoButton
-                text: "Download Video"
                 Layout.fillWidth: true
-                enabled: chartImage.source != "" // Only enabled after propagation
-                onClicked: videoSaveDialog.open()
-                
+                Layout.preferredHeight: 45
+                text: "Download Video"
                 background: Rectangle {
-                    color: parent.enabled ? (parent.down ? "#45475a" : "#cba6f7") : "#2a2b3d"
+                    color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
                     radius: 8
+                    border.color: "#45475a"
                 }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? "white" : "#45475a"
+                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: videoSaveDialog.open()
+            }
+
+            Button {
+                id: downloadMaskDataButton
+                Layout.fillWidth: true
+                Layout.preferredHeight: 45
+                text: "Download Masks (CSV)"
+                background: Rectangle {
+                    color: parent.enabled ? (parent.down ? "#45475a" : "#89b4fa") : "#2a2b3d"
+                    radius: 8
+                    border.color: "#45475a"
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? "white" : "#45475a"
+                    font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: maskSaveDialog.open()
             }
         }
     }
@@ -285,6 +290,30 @@ ApplicationWindow {
         onAccepted: {
             if (typeof python_bridge !== "undefined")
                 python_bridge.download_csv(selectedFile);
+        }
+    }
+
+    FileDialog {
+        id: videoSaveDialog
+        title: "Save Processed Video"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["MP4 Video (*.mp4)"]
+        currentFile: "squirrel_propagation.mp4"
+        onAccepted: {
+            if (typeof python_bridge !== "undefined")
+                python_bridge.download_video(selectedFile);
+        }
+    }
+
+    FileDialog {
+        id: maskSaveDialog
+        title: "Save Mask Training Data as CSV"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["CSV File (*.csv)"]
+        currentFile: "squirrel_training_coords.csv"
+        onAccepted: {
+            if (typeof python_bridge !== "undefined")
+                python_bridge.download_training_csv(selectedFile);
         }
     }
 
