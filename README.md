@@ -7,7 +7,8 @@ Built with PySide6 (Qt/QML) and Python, this application allows users to:
 - Segment an object (e.g., a squirrel) across frames
 - Visualize mask area changes over time
 - Export graph data (CSV)
-- Export processed video
+- Export processed video with mask
+- Export mask data
 
 ---
 
@@ -18,10 +19,9 @@ Squirrel-App combines a modern QML-based UI with a Python backend that performs 
 ### System Workflow
 
 1. Load video frames
-2. Apply SAM3 segmentation
+2. Apply SAM3 segmentation on single images or
 3. Propagate segmentation across the full video
-4. Compute mask area statistics
-5. Generate a Matplotlib graph
+4. Generate a graph
 6. Export results
 
 ---
@@ -40,6 +40,7 @@ Squirrel-App combines a modern QML-based UI with a Python backend that performs 
 ---
 
 ## Project Structure
+```bash
 Squirrel-App/
 │
 ├── UI/
@@ -51,8 +52,7 @@ Squirrel-App/
 ├── main.py
 ├── requirements.txt
 └── README.md
-
-
+```
 ---
 
 ## Architecture
@@ -110,7 +110,7 @@ Responsibilities:
 git clone https://github.com/janbecker2/Squirrel-App.git
 cd Squirrel-App
 ```
-2. Install dependencies
+### 2. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
