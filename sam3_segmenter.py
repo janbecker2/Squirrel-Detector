@@ -104,13 +104,16 @@ class Sam3VideoSegmenter:
         cv.destroyAllWindows()
     
     def propagate_video(self, show_live=False, status_callback=None):
+        """
+        Runs SAM3 propagation and calculates bounding boxes in a single pass.
+        """
         if self.video_frames is None:
             raise ValueError("Load a video first.")
 
         # Initialize storage containers
         self.mask_areas = []
         self.processed_frames = [] 
-        self.mask_data_storage = [] # To store training coordinates
+        self.mask_data_storage = [] # Stores bounding box metadata
         
         total_frames = len(self.video_frames)
         start_time = time.time()
@@ -120,64 +123,67 @@ class Sam3VideoSegmenter:
             frame_idx = model_outputs.frame_idx
             processed_outputs = self.processor.postprocess_outputs(self.inference_session, model_outputs)
             
-            # Use the resized frame for calculations
+            # Use the resized frame for display and calculation
             current_frame = self.video_frames[frame_idx].copy()
             h, w = current_frame.shape[:2]
 
             mask_area = 0
-            x_str, y_str = "", "" # Default empty strings for frames with no squirrel
+            # Default empty values for frames with no squirrel detected
+            x_min, y_min, x_max, y_max = "", "", "", ""
 
             # Check if any mask was detected in this frame
             if processed_outputs["masks"].numel() > 0:
-                # Extract binary mask (0 or 1)
+                # Extract binary mask
                 mask = processed_outputs["masks"][0].detach().cpu().numpy().astype("uint8")
                 
-                # 1. Calculate Area (sum of all True/1 pixels)
+                # 1. Calculate Area (count of pixels > 0)
                 mask_area = int(np.sum(mask > 0))
 
-                # 2. Extract Training Coordinates (X;Y)
+                # 2. Calculate Bounding Box (Min/Max coordinates)
                 y_coords, x_coords = np.where(mask > 0)
                 if len(x_coords) > 0:
-                    x_str = ";".join(map(str, x_coords))
-                    y_str = ";".join(map(str, y_coords))
+                    x_min, x_max = int(np.min(x_coords)), int(np.max(x_coords))
+                    y_min, y_max = int(np.min(y_coords)), int(np.max(y_coords))
 
-                # 3. Create Visual Overlay for UI
+                # 3. Create the visual Green Overlay for the UI
                 overlay = current_frame.copy()
-                overlay[mask > 0] = [0, 255, 0] # Green tint
+                overlay[mask > 0] = [0, 255, 0]
                 current_frame = cv.addWeighted(overlay, 0.5, current_frame, 0.5, 0)
 
-            # Store results in instance variables
+            # Store the frame for the UI slider and the metadata for the CSV
             self.mask_areas.append(mask_area)
             self.processed_frames.append(current_frame)
             self.mask_data_storage.append({
                 "idx": frame_idx, 
                 "w": w, 
                 "h": h, 
-                "x": x_str, 
-                "y": y_str
+                "x1": x_min, 
+                "y1": y_min, 
+                "x2": x_max, 
+                "y2": y_max
             })
 
-            # Handle Live View (Optional)
+            # Optional: Show live processing window
             if show_live:
                 cv.imshow("Segmented Video", current_frame)
                 if cv.waitKey(1) & 0xFF == ord('q'):
                     break
 
-            # Calculate and send status updates
+            # Calculate and send status updates to the UI
             elapsed = time.time() - start_time
             avg_per_frame = elapsed / i
             remaining_time = avg_per_frame * (total_frames - i)
             
             status_text = (
                 f"Frame {i}/{total_frames} processed. "
-                f"Elapsed: {elapsed:.1f}s, "
-                f"Remaining: {remaining_time:.1f}s"
+                f"Elapsed: {elapsed:.1f}s, Remaining: {remaining_time:.1f}s"
             )
             
             if status_callback:
                 status_callback(status_text)
 
         cv.destroyAllWindows()
+        print("\nFinished processing all frames")
         return self.processed_frames
     
     def generate_graph_image(self, chart_data):
@@ -231,23 +237,33 @@ class Sam3VideoSegmenter:
 
     def export_mask_csv(self, output_path):
         """
-        Saves the coordinates collected during propagation to a CSV.
+        Export the precalculated bounding boxes to a CSV
         """
+        # Ensure propagation has been run first
         if not hasattr(self, "mask_data_storage") or not self.mask_data_storage:
-            print("No mask data found. Run propagate_video first.")
+            print("Error: No data to export. Please run 'Propagate Video' first.")
             return False
 
         try:
             with open(output_path, mode='w', newline='') as file:
                 writer = csv.writer(file)
-                # Header compatible with typical ML training scripts
-                writer.writerow(["frame_idx", "width", "height", "x_points", "y_points"])
+                # Modern training header: Top-left (x1, y1) to Bottom-right (x2, y2)
+                writer.writerow(["frame_idx", "width", "height", "x_min", "y_min", "x_max", "y_max"])
 
                 for data in self.mask_data_storage:
-                    writer.writerow([data["idx"], data["w"], data["h"], data["x"], data["y"]])
+                    writer.writerow([
+                        data["idx"], 
+                        data["w"], 
+                        data["h"], 
+                        data["x1"], 
+                        data["y1"], 
+                        data["x2"], 
+                        data["y2"]
+                    ])
             
-            print(f"Exported {len(self.mask_data_storage)} frames to {output_path}")
+            print(f"Successfully exported {len(self.mask_data_storage)} frames to {output_path}")
             return True
+            
         except Exception as e:
             print(f"CSV Export Error: {e}")
             return False

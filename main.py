@@ -119,6 +119,12 @@ class Bridge(QObject):
             self.operationFinished.emit("Training CSV Exported Successfully!")
         else:
             self.operationFinished.emit("Training Export Failed: No mask data found.")
+            
+    @Slot()
+    def open_help_link(self):
+        """Opens the documentation or support link in the browser."""
+        url = QUrl("https://your-help-link.com") # Replace with your actual URL
+        QDesktopServices.openUrl(url)
 
 # --- Execution ---
 if __name__ == "__main__":
