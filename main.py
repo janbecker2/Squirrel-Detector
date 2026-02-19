@@ -1,18 +1,19 @@
 import sys
-from pathlib import Path
+import os
 import threading
+import time
+from pathlib import Path
 
-# Core PySide6 imports
-from PySide6.QtWidgets import QApplication, QSplashScreen 
+from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QObject, Slot, Signal, QTimer, QMetaObject, Qt, QPropertyAnimation
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 
-import cv2 as cv
+# Internal imports
+from splash import SplashScreen 
 from sam3_segmenter import Sam3VideoSegmenter
 
-# --- Image Provider for QML ---
 class FrameProvider(QQuickImageProvider): 
     def __init__(self):
         super().__init__(QQuickImageProvider.Image)
@@ -23,10 +24,9 @@ class FrameProvider(QQuickImageProvider):
 
     def update_frame(self, cv_img):
         h, w, ch = cv_img.shape
-        # Convert BGR to RGB and copy memory to prevent crashes
+        # Convert BGR to RGB and copy memory to ensure safety between threads
         self.current_frame = QImage(cv_img.data, w, h, ch * w, QImage.Format_RGB888).rgbSwapped().copy()
 
-# --- Logic Bridge ---
 class Bridge(QObject):
     maxFrameChanged = Signal(int)
     frameUpdated = Signal() 
@@ -35,10 +35,16 @@ class Bridge(QObject):
     statusUpdated = Signal(str) 
     operationFinished = Signal(str) 
 
-    def __init__(self, provider):
+    def __init__(self, provider, splash=None):
         super().__init__()
         self.provider = provider
+        
+        # 1. Update Splash Progress: Start
+        if splash: splash.set_progress(20)
         self.segmenter = Sam3VideoSegmenter(target_size=1024)
+        
+        # 2. Update Splash Progress: Model Loaded
+        if splash: splash.set_progress(80)
         
         self.frame_timer = QTimer(self)
         self.frame_timer.setSingleShot(True)
@@ -69,7 +75,7 @@ class Bridge(QObject):
     @Slot(int)
     def request_frame(self, frame_idx):
         self.pending_frame_idx = frame_idx
-        self.frame_timer.start(16) # ~60fps response
+        self.frame_timer.start(16)
 
     @Slot()
     def _process_frame(self):
@@ -110,16 +116,32 @@ class Bridge(QObject):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # 1. Setup Splash
-    pixmap = QPixmap(str(Path(__file__).parent / "UI" / "assets" / "splash.png"))
-    splash = QSplashScreen(pixmap if not pixmap.isNull() else QPixmap(600, 400))
-    splash.show()
-    splash.showMessage("Initializing SAM3 AI Model...", Qt.AlignBottom | Qt.AlignCenter, Qt.white)
-    app.processEvents() 
+    # Enable high-quality pixmaps for the logo    
+    app.setAttribute(Qt.AA_UseHighDpiPixmaps)
+    
+    # 2. Load the transparent logo
+    logo_path = Path(__file__).parent / "UI" / "assets" / "logo_transparent.png"
+    logo_img = QPixmap(str(logo_path))
+    
+    if logo_img.isNull():
+        print(f"!!! Error: Logo not found at {logo_path}")
 
-    # 2. Setup Logic & Engine
+    # 2. Initialize and Show Splash
+    splash = SplashScreen(logo_img, width=500, height=350)
+    splash.show()
+    
+    # 3. FORCE DISPLAY
+    # We call this multiple times to ensure the window is painted 
+    # before the CPU gets locked by the AI model.
+    for _ in range(10):
+        app.processEvents()
+        
+    # 4. Heavy Initialization
     provider = FrameProvider()
-    bridge = Bridge(provider)
+    bridge = Bridge(provider, splash=splash)
+    
+    # 3. Engine Setup
+    if splash: splash.set_progress(90)
     engine = QQmlApplicationEngine()
     engine.addImageProvider("frames", provider)
     engine.rootContext().setContextProperty("python_bridge", bridge)
@@ -128,19 +150,18 @@ if __name__ == "__main__":
     if not engine.rootObjects():
         sys.exit(-1)
 
-    # 3. Transition Splash -> Main
+    if splash: splash.set_progress(100)
+    time.sleep(0.5)  # Brief pause to let users see the completed splash before transition
+    # 4. Professional Transition Splash -> Main
     main_window = engine.rootObjects()[0]
-    
-    # Create fade animation
     fade = QPropertyAnimation(splash, b"windowOpacity")
-    fade.setDuration(500)
+    fade.setDuration(600)
     fade.setStartValue(1.0)
     fade.setEndValue(0.0)
     fade.finished.connect(splash.close)
     
-    # Finalize UI
     main_window.show()
-    main_window.raise_() # Fixed: Added underscore to avoid SyntaxError
+    main_window.raise_() # Fixed: Added underscore to avoid Python keyword conflict
     main_window.requestActivate()
     fade.start()
 

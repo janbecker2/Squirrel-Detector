@@ -288,17 +288,7 @@ ApplicationWindow {
         }
     }
 
-    FileDialog {
-        id: videoSaveDialog
-        title: "Save Processed Video"
-        fileMode: FileDialog.SaveFile
-        nameFilters: ["MP4 files (*.mp4)"]
-        currentFile: "processed_squirrel.mp4"
-        onAccepted: {
-            if (typeof python_bridge !== "undefined")
-                python_bridge.download_video(selectedFile)
-        }
-    }
+    
 
     // ==========================================
     // CONNECTIONS
