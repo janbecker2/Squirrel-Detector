@@ -17,12 +17,17 @@ import matplotlib.ticker as ticker
 class Sam3VideoSegmenter:
     # Initialize the segmenter with model loading and processing device
     def __init__(self, model_id="facebook/sam3", target_size=512):
+        if not torch.cuda.is_available():
+            print("IMPORTANT: GPU not detected in this environment!")
+            print("SAM 3 will be extremely slow or stuck on CPU and GUI can crash!!!!")
+            
         self.device = Accelerator().device
         self.MODEL_ID = model_id
         self.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         self.DTYPE = torch.bfloat16
         self.TARGET_SIZE = target_size
 
+        print(f"Supported Architectures: {torch.cuda.get_arch_list()}")
         # Load model
         self.model = Sam3VideoModel.from_pretrained(self.MODEL_ID).to(
             self.DEVICE, dtype=self.DTYPE
@@ -72,43 +77,44 @@ class Sam3VideoSegmenter:
 
     # Function to process a single frame
     def showSingleFrame(self, frame_idx, return_frame_only=False):
-        # Run inference for the specified frame index
-        model_outputs = self.model(
-            inference_session=self.inference_session,
-            frame_idx=frame_idx,
-        )
+        with torch.no_grad():
+            # Run inference for the specified frame index
+            model_outputs = self.model(
+                inference_session=self.inference_session,
+                frame_idx=frame_idx,
+            )
 
-        # Postprocess outputs to get masks
-        processed_outputs = self.processor.postprocess_outputs(
-            self.inference_session,
-            model_outputs
-        )
+            # Postprocess outputs to get masks
+            processed_outputs = self.processor.postprocess_outputs(
+                self.inference_session,
+                model_outputs
+            )
 
-        # Store the processed outputs for this frame
-        frame_output = processed_outputs
-        
-        # Get the original size frame for display
-        frame = self.video_frames_original_size[frame_idx].copy()
-        h, w = frame.shape[:2]
-
-        # Check if any masks were detected and create overlay
-        if len(frame_output["masks"]) > 0:
-            raw_mask = frame_output["masks"][0].detach().cpu().numpy().astype("uint8") * 255
+            # Store the processed outputs for this frame
+            frame_output = processed_outputs
             
-            mask_resized = cv.resize(raw_mask, (w, h), interpolation=cv.INTER_NEAREST)
+            # Get the original size frame for display
+            frame = self.video_frames_original_size[frame_idx].copy()
+            h, w = frame.shape[:2]
+
+            # Check if any masks were detected and create overlay
+            if len(frame_output["masks"]) > 0:
+                raw_mask = frame_output["masks"][0].detach().cpu().numpy().astype("uint8") * 255
+                
+                mask_resized = cv.resize(raw_mask, (w, h), interpolation=cv.INTER_NEAREST)
+                
+                frame[mask_resized == 255] = [0, 255, 0]  
+            else:
+                print(f"No masks detected for frame {frame_idx}")
             
-            frame[mask_resized == 255] = [0, 255, 0]  
-        else:
-            print(f"No masks detected for frame {frame_idx}")
-        
-        # Return frame if requested; otherwise show the frame with cv2
-        if return_frame_only:
+            # Return frame if requested; otherwise show the frame with cv2
             frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-            return frame_rgb
+            if return_frame_only:
+                return frame_rgb
 
-        cv.imshow("High Res Mask", frame)
-        cv.waitKey(0)
-        cv.destroyAllWindows()
+            cv.imshow("High Res Mask", frame_rgb)
+            cv.waitKey(0)
+            cv.destroyAllWindows()
     
     # Function to run sam3 propagation across the entire video 
     def propagate_video(self, show_live=False, status_callback=None):
@@ -290,3 +296,4 @@ class Sam3VideoSegmenter:
         except Exception as e:
             print(f"Failed to export video: {e}")
             return False
+        

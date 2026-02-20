@@ -1,18 +1,22 @@
+# Index for RTX 50-Series (Blackwell sm_120)
+--extra-index-url https://download.pytorch.org/whl/nightly/cu128
+
 PySide6==6.10.2
-# AI Stack
+
 torch==2.10.0
 torchvision==0.25.0
+
 transformers==5.2.0
 accelerate==1.12.0
 timm==1.0.24
 einops==0.8.2
 safetensors==0.7.0
-# Video & Data Helpers 
+
+opencv-python==4.11.0.86
 av==16.1.0
 decord==0.6.0
 ftfy==6.1.1
 iopath==0.1.10
-# Standard Data
 numpy==1.26.4
-opencv-python==4.11.0.86
 matplotlib==3.10.8
+python-dotenv
