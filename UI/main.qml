@@ -20,16 +20,13 @@ ApplicationWindow {
         anchors.margins: 20
         spacing: 15
 
-        // ==========================================
-        // HEADER ROW: Logo, Title, and Help
-        // ==========================================
+        // Header Row 
         RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: 150 
-            // Negative vertical margins tighten the gap caused by the 150px height
             Layout.topMargin: -20     
             Layout.bottomMargin: -20 
-            Layout.leftMargin: -20       // Ensures no shift from the parent ColumnLayout boundary
+            Layout.leftMargin: -20       
             spacing: 15
 
             Image {
@@ -38,7 +35,6 @@ ApplicationWindow {
                 Layout.preferredHeight: 150
                 fillMode: Image.PreserveAspectFit
                 smooth: true
-                // This is the key: force the image content to the start of its layout box
                 horizontalAlignment: Image.AlignLeft
                 verticalAlignment: Image.AlignVCenter 
             }
@@ -46,19 +42,18 @@ ApplicationWindow {
             ColumnLayout {
                 spacing: 0
                 Layout.alignment: Qt.AlignVCenter
-                // Pull text closer to the logo box to account for any logo transparency
                 Layout.leftMargin: -25 
 
                 Text {
                     text: "Squirrel Detector"
-                    color: "#f5e0dc" // Rosewater
+                    color: "#f5e0dc" 
                     font.pixelSize: 36
                     font.bold: true
                 }
                 
             }
 
-            Item { Layout.fillWidth: true } // Spacer pushes help button to the right
+            Item { Layout.fillWidth: true } 
 
             Button {
                 id: helpButton
@@ -92,9 +87,7 @@ ApplicationWindow {
             }
         }
 
-        // ==========================================
-        // 1. VIDEO DISPLAY AREA
-        // ==========================================
+        // Video display Area 
         Rectangle {
             id: videoContainer
             Layout.fillWidth: true
@@ -126,6 +119,7 @@ ApplicationWindow {
                 font.pixelSize: 24
             }
 
+            // Loading Overlay
             Item {
                 anchors.fill: parent
                 visible: uploadButton.loading || propagateButton.loading
@@ -176,9 +170,7 @@ ApplicationWindow {
             }
         }
 
-        // ==========================================
-        // 2. CONTROLS ROW
-        // ==========================================
+        // Controls/Buttons Row
         RowLayout {
             Layout.fillWidth: true
             spacing: 20
@@ -266,9 +258,7 @@ ApplicationWindow {
             }
         }
 
-        // ==========================================
-        // 3. CHART AREA
-        // ==========================================
+        // graph display area
         Rectangle {
             id: chartContainer
             Layout.fillWidth: true
@@ -293,9 +283,7 @@ ApplicationWindow {
             }
         }
 
-        // ==========================================
-        // 4. DOWNLOAD OPTIONS ROW
-        // ==========================================
+        // Download Buttons Row
         RowLayout {
             Layout.fillWidth: true
             spacing: 15
@@ -363,9 +351,7 @@ ApplicationWindow {
         }
     }
 
-    // ==========================================
-    // DIALOGS
-    // ==========================================
+    // Dialogs to handlle file selection and downloads
     FileDialog {
         id: videoFileDialog
         title: "Select Video"
@@ -414,9 +400,7 @@ ApplicationWindow {
         }
     }
 
-    // ==========================================
-    // CONNECTIONS
-    // ==========================================
+    // Connections to handle signals from the Python backend
     Connections {
         target: python_bridge
         ignoreUnknownSignals: true
