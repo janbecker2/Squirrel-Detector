@@ -1,17 +1,18 @@
-# Index for RTX 50-Series (Blackwell sm_120)
---extra-index-url https://download.pytorch.org/whl/nightly/cu128
+# Spezial-Index für Blackwell (sm_120) ganz oben
+--index-url https://download.pytorch.org/whl/nightly/cu128
+--extra-index-url https://pypi.org/simple
 
+# Erst die kritischen Pakete ohne feste Version, damit pip die Nightly wählt
+torch
+torchvision
+
+# Dann der Rest der App
 PySide6==6.10.2
-
-torch==2.10.0
-torchvision==0.25.0
-
 transformers==5.2.0
 accelerate==1.12.0
 timm==1.0.24
 einops==0.8.2
 safetensors==0.7.0
-
 opencv-python==4.11.0.86
 av==16.1.0
 decord==0.6.0
