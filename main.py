@@ -11,6 +11,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 from splash import SplashScreen 
 
+from sam3_authenticator import SAM3Auth
 from sam3_segmenter import Sam3VideoSegmenter
 
 # Frame Provider for QML to fetch video frames from the segmenter
@@ -43,7 +44,16 @@ class Bridge(QObject):
         
         # Show initial progress on splash screen
         if splash: splash.set_progress(20)
-        
+        app.processEvents() 
+
+        # authenticate user for access to models
+        auth = SAM3Auth()
+        if not auth.login():
+            print("Login fehlgeschlagen. Beende App...")
+            sys.exit(-1)
+            
+        splash.set_progress(50)
+        app.processEvents()
         self.segmenter = Sam3VideoSegmenter(target_size=1024)
         
         if splash: splash.set_progress(80)
