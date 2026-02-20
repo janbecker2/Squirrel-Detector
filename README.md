@@ -25,17 +25,22 @@ Squirrel Detector offers the following functionalities:
 ## Project Structure
 
 ```bash
-Squirrel-App/
+Squirrel-Detector/
+├── logic/                  # Classes
+│   ├── bridge.py           
+│   ├── frame_provider.py   
+│   ├── sam3_authenticator.py
+│   └── sam3_segmenter.py   
 │
-├── UI/
-│ ├── main.qml
-│ └── assets/
+├── UI/                     # Frontend & Design
+│   ├── main.qml            
+│   ├── splash.py           
+│   └── assets/             
 │
-├── splash.py
-├── sam3_segmenter.py
-├── main.py
-├── requirements.txt
-└── README.md
+├── main.py                 # Application Entry Point
+├── .env                    # Environment variables (HF_TOKEN)
+├── requirements.txt        # Project dependencies
+└── README.md               # Documentation
 ```
 
 

@@ -13,7 +13,16 @@ ApplicationWindow {
     title: "Squirrel Video Viewer"
     color: "#1e1e2e"
 
+    // Error dialog 
+    MessageDialog {
+        id: errorDialog
+        title: "Error"
+        text: ""
+        onAccepted: visible = false
+    }
+
     property string propagationStatus: "Processing Video..."
+
 
     ColumnLayout {
         anchors.fill: parent
