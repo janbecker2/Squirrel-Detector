@@ -7,8 +7,8 @@
 
 Squirrel Detector is an application built directly on the SAM3 model. A dedicated class provides access for performing segmentation with the SAM3 model. Furthermore, it provides several functions to export result data. The intuitive and user-friendly GUI, shown below, is built with the Qt framework. It provides a smooth and visually clear interface, allowing users to interact with the segmentation process and view results while keeping the computational logic separate.
 
-<p align="left">
-  <img src="UI/assets/UI_Overview.png" width="600">
+<p align="center">
+  <img src="UI/assets/UI_Overview.png" width="700">
 </p>
 
 ## Overview
@@ -75,7 +75,7 @@ python main.py
 ---
 
 ### Usage of the Sam3VideoSegmenter Class 
-> **Tip:** You can also use the `Sam3VideoSegmenter` class directly in Python scripts **without using the GUI**:  
+> **Note:** You can also use the `Sam3VideoSegmenter` class directly in Python scripts **without using the GUI**:  
 
 ```python
 from segmenter import Sam3VideoSegmenter
