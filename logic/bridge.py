@@ -15,16 +15,18 @@ class Bridge(QObject):
     operationFinished = Signal(str) 
     video_load_failed = Signal(str)
 
+    # Initializing bridge 
     def __init__(self, provider, app_instance, splash=None):
+        # Initialize the QObject and store the provider
         super().__init__()
         self.provider = provider
         self.app = app_instance
         
-        # Fortschritt auf dem Splash Screen aktualisieren
+        # Show initial progress on splash screen
         if splash: splash.set_progress(20)
         self.app.processEvents() 
 
-        # Authentifizierung für Modell-Zugriff
+        # authenticate user for access to models
         auth = SAM3Auth()
         if not auth.login():
             print("Login failed. Closing App...")
@@ -39,7 +41,7 @@ class Bridge(QObject):
         if splash: splash.set_progress(80)
         self.app.processEvents()
         
-        # Timer für die Frame-Verarbeitung (flüssiges UI)
+        # Timer for frame processing
         self.frame_timer = QTimer(self)
         self.frame_timer.setSingleShot(True)
         self.frame_timer.timeout.connect(self._process_frame)
@@ -47,32 +49,42 @@ class Bridge(QObject):
         self.last_processed_frames = [] 
         self.propagationFinished.connect(self.generate_graph)
 
+    # herlper method to convert file URLs to paths
     def _parse_path(self, url):
-        """Konvertiert QML File-URLs in lokale Systempfade."""
         path = url.replace("file:///", "")
         if sys.platform == "win32":
             path = path.replace("/", "\\")
             if path.startswith("\\") and ":" in path: path = path[1:]
         return path
 
+    # load video function called from QML
     @Slot(str)
     def load_video(self, video_url):
         path = self._parse_path(video_url)
-        # Threading verhindert das Einfrieren der GUI beim Laden schwerer Videos
         threading.Thread(target=self._run_segmentation, args=(path,), daemon=True).start()
 
+     # runs segmentation in another thread to avoid crashing UI!!!
     def _run_segmentation(self, path):
-        self.segmenter.load_video(path)
-        self.segmenter.add_text_prompt("Squirrel")
-        self.maxFrameChanged.emit(len(self.segmenter.video_frames) - 1)
-        self.pending_frame_idx = 0
-        QMetaObject.invokeMethod(self, "_process_frame", Qt.QueuedConnection)
+        try:
+            self.segmenter.load_video(path)
 
+            self.segmenter.add_text_prompt("Squirrel")
+            self.maxFrameChanged.emit(len(self.segmenter.video_frames) - 1)
+            self.pending_frame_idx = 0
+            QMetaObject.invokeMethod(self, "_process_frame", Qt.QueuedConnection)
+            
+        except Exception as e:
+            self.pending_frame_idx = None
+            error_message = "Error loading video: Downsize the video or try a shorter sequence to avoid VRAM overflow!"
+            self.video_load_failed.emit(error_message)
+
+    # Slot to handle frame requests of QML
     @Slot(int)
     def request_frame(self, frame_idx):
         self.pending_frame_idx = frame_idx
         self.frame_timer.start(16)
 
+    # processes a single frame and showing in qml
     @Slot()
     def _process_frame(self):
         if self.pending_frame_idx is None: return
@@ -82,6 +94,7 @@ class Bridge(QObject):
             self.frameUpdated.emit()
         self.pending_frame_idx = None
 
+    # starts video propagation; again in seperate thread to avoid UI crash!
     @Slot()
     def propagate_video(self):
         def worker():
@@ -89,6 +102,7 @@ class Bridge(QObject):
             self.propagationFinished.emit()
         threading.Thread(target=worker, daemon=True).start()
 
+    # generates graph image and sends URL to QML;
     @Slot()
     def generate_graph(self):
         if not self.segmenter.mask_areas: return
@@ -96,11 +110,13 @@ class Bridge(QObject):
         url = self.segmenter.generate_graph_image([int(x) for x in self.segmenter.mask_areas])
         if url: self.chartImageUpdated.emit(url)
 
+    # export function for CSV of graph data
     @Slot(str)
     def download_csv(self, file_url):
         if self.segmenter.export_graph_csv(self._parse_path(file_url)):
             self.operationFinished.emit("CSV Data Exported Successfully!")
 
+    # export function for video with masks
     @Slot(str)
     def download_video(self, file_url):
         try:
@@ -109,6 +125,7 @@ class Bridge(QObject):
         except Exception:
             self.operationFinished.emit("Video Export Failed.")
     
+    # export function for CSV of mask bounding boxes per frame
     @Slot(str)
     def download_training_csv(self, file_url):
         path = self._parse_path(file_url)
@@ -116,7 +133,7 @@ class Bridge(QObject):
             self.operationFinished.emit("Training CSV Exported Successfully!")
         else:
             self.operationFinished.emit("Training Export Failed: No mask data found.")
-    
+    # function to open github readme in browser
     @Slot()
     def open_help_link(self):
         QDesktopServices.openUrl(QUrl("https://github.com/janbecker2/Squirrel-App/blob/main/README.md"))

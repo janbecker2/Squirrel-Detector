@@ -40,12 +40,12 @@ ApplicationWindow {
                 spacing: 10
                 Text {
                     text: "⚠"
-                    color: "#f38ba8"
+                    color: "#ff0000"
                     font.pixelSize: 24
                     font.bold: true
                 }
                 Text {
-                    text: "System Notification"
+                    text: "ERROR"
                     color: "#cdd6f4"
                     font.pixelSize: 20
                     font.bold: true
@@ -472,11 +472,6 @@ ApplicationWindow {
         }
     }
 
-Shortcut {
-    sequence: "I"
-    onActivated: resetUI("Error Test")
-}
-
     // Connections to handle signals from the Python backend
     Connections {
         target: python_bridge
@@ -505,7 +500,7 @@ Shortcut {
         function onChartImageUpdated(imgData) {
             chartImage.source = imgData;
         }
-        function resetUI(message) {
+        function resetUI(message, popup = true) {
             window.isReset = true; 
 
             uploadButton.loading = false;
@@ -516,9 +511,10 @@ Shortcut {
 
             videoFrame.source = "";
             chartImage.source = "";   
-
-            errorPopup.errorText = message;
-            errorPopup.open();
+            if(popup){
+                errorPopup.errorText = message;
+                errorPopup.open();
+            }
         }
         function onVideo_load_failed(errorMessage) {
             resetUI(errorMessage);
