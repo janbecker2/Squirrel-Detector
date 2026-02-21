@@ -3,7 +3,6 @@ import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQml
-import QtCore
 
 ApplicationWindow {
     id: window
@@ -12,13 +11,76 @@ ApplicationWindow {
     height: 980
     title: "Squirrel Video Viewer"
     color: "#1e1e2e"
+    property bool isReset: false
 
-    // Error dialog 
-    MessageDialog {
-        id: errorDialog
-        title: "Error"
-        text: ""
-        onAccepted: visible = false
+
+    // Error popup 
+    Popup {
+        id: errorPopup
+        anchors.centerIn: parent
+        width: 400
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        property string errorText: ""
+
+        background: Rectangle {
+            color: "#1e1e2e" // Main background color
+            border.color: "#f38ba8" // Red accent for errors
+            border.width: 2
+            radius: 12
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 20
+            anchors.margins: 20
+
+            RowLayout {
+                spacing: 10
+                Text {
+                    text: "⚠"
+                    color: "#f38ba8"
+                    font.pixelSize: 24
+                    font.bold: true
+                }
+                Text {
+                    text: "System Notification"
+                    color: "#cdd6f4"
+                    font.pixelSize: 20
+                    font.bold: true
+                }
+            }
+
+            Text {
+                text: errorPopup.errorText
+                color: "#a6adc8"
+                font.pixelSize: 14
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Button {
+                text: "Dismiss"
+                Layout.alignment: Qt.AlignRight
+                Layout.preferredWidth: 100
+                Layout.preferredHeight: 35
+                
+                background: Rectangle {
+                    color: parent.hovered ? "#313244" : "#181825"
+                    radius: 6
+                    border.color: "#45475a"
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: "#cdd6f4"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.bold: true
+                }
+                onClicked: errorPopup.close()
+            }
+        }
     }
 
     property string propagationStatus: "Processing Video..."
@@ -111,7 +173,7 @@ ApplicationWindow {
                 fillMode: Image.PreserveAspectFit
                 source: "image://frames/current"
                 cache: false
-                visible: frameSlider.to > 1
+                visible: !window.isReset && frameSlider.to > 1
                 opacity: uploadButton.loading || propagateButton.loading ? 0.3 : 1.0
                 Behavior on opacity {
                     NumberAnimation {
@@ -366,6 +428,7 @@ ApplicationWindow {
         title: "Select Video"
         nameFilters: ["Video files (*.mp4 *.avi *.mov *.mkv)"]
         onAccepted: {
+            window.isReset = false;
             uploadButton.loading = true;
             chartImage.source = "";
             if (typeof python_bridge !== "undefined")
@@ -409,6 +472,11 @@ ApplicationWindow {
         }
     }
 
+Shortcut {
+    sequence: "I"
+    onActivated: resetUI("Error Test")
+}
+
     // Connections to handle signals from the Python backend
     Connections {
         target: python_bridge
@@ -422,8 +490,12 @@ ApplicationWindow {
             window.propagationStatus = status;
         }
         function onMaxFrameChanged(max) {
+            window.isReset = false;
             frameSlider.to = max;
             uploadButton.loading = false;
+            videoFrame.source = "";
+            videoFrame.source = "image://frames/current?t=" + Date.now();
+            python_bridge.request_frame(0);
         }
         function onPropagationFinished() {
             propagateButton.loading = false;
@@ -432,6 +504,24 @@ ApplicationWindow {
         }
         function onChartImageUpdated(imgData) {
             chartImage.source = imgData;
+        }
+        function resetUI(message) {
+            window.isReset = true; 
+
+            uploadButton.loading = false;
+            propagateButton.loading = false;
+
+            frameSlider.to = 1; 
+            frameSlider.value = 0;
+
+            videoFrame.source = "";
+            chartImage.source = "";   
+
+            errorPopup.errorText = message;
+            errorPopup.open();
+        }
+        function onVideo_load_failed(errorMessage) {
+            resetUI(errorMessage);
         }
     }
 }

@@ -13,7 +13,7 @@ from UI.splash import SplashScreen
 from logic.frame_provider import FrameProvider
 from logic.bridge import Bridge
 
-if __name__ == "__main__":
+def main():
     # app setup
     app = QApplication(sys.argv)
     app.setAttribute(Qt.AA_UseHighDpiPixmaps) 
@@ -59,3 +59,6 @@ if __name__ == "__main__":
     fade.start()
 
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

@@ -2,8 +2,6 @@ import sys
 import threading
 from PySide6.QtCore import QObject, Slot, Signal, QTimer, QMetaObject, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-
-# Absolute Imports für die Paketstruktur
 from logic.sam3_authenticator import SAM3Auth
 from logic.sam3_segmenter import Sam3VideoSegmenter
 
